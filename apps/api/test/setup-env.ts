@@ -1,0 +1,4 @@
+// 테스트 전용 env — fail-fast 검증을 통과하는 유효한 값
+process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret-0123456789-0123456789';
+process.env.APP_ENCRYPTION_KEY =
+  process.env.APP_ENCRYPTION_KEY ?? '1111111111111111111111111111111111111111111111111111111111111111';

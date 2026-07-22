@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 @Module({
   imports: [
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'change-me-in-prod',
+      secret: process.env.JWT_SECRET as string,
       signOptions: { expiresIn: '8h' },
     }),
   ],

@@ -1,3 +1,4 @@
+import './config/validate-env'; // 반드시 첫 import — .env 로드 + fail-fast
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';

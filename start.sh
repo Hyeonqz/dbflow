@@ -25,10 +25,25 @@ done
 
 log() { printf '\033[36m[dbflow]\033[0m %s\n' "$1"; }
 
-# 0) .env 준비
+# 0) .env 준비 (최초 생성 시 실제 시크릿 자동 생성 — fail-fast 통과)
 if [ ! -f "$ROOT/apps/api/.env" ]; then
-  log ".env 생성 (.env.example 복사)"
+  log ".env 생성 (.env.example 복사 + 시크릿 생성)"
   cp "$ROOT/.env.example" "$ROOT/apps/api/.env"
+  JWT_GEN="$(openssl rand -hex 32)"
+  KEY_GEN="$(openssl rand -hex 32)"
+  sed -i.bak \
+    -e "s/^JWT_SECRET=.*/JWT_SECRET=\"$JWT_GEN\"/" \
+    -e "s/^APP_ENCRYPTION_KEY=.*/APP_ENCRYPTION_KEY=\"$KEY_GEN\"/" \
+    "$ROOT/apps/api/.env"
+  rm -f "$ROOT/apps/api/.env.bak"
+fi
+
+# 0-1) 구버전 .env(기본 시크릿) 감지 — fail-fast에 걸리므로 안내 후 중단
+if grep -q 'change-me-in-prod' "$ROOT/apps/api/.env" \
+   || grep -Eq '^APP_ENCRYPTION_KEY="?0{64}"?' "$ROOT/apps/api/.env"; then
+  echo "apps/api/.env에 기본 시크릿이 남아 있습니다. 파일을 지우고 ./start.sh를 다시 실행하면 재생성됩니다:" >&2
+  echo "  rm apps/api/.env && ./start.sh" >&2
+  exit 1
 fi
 
 # 1) MySQL 기동 (이미 떠 있으면 skip, 없으면 up)
@@ -63,17 +78,13 @@ fi
 log "Prisma 마이그레이션 적용..."
 pnpm --filter @dbflow/api exec prisma migrate deploy
 
-# 5) (옵션) 시드
-if [ "$DO_SEED" = true ]; then
-  log "시드 유저 생성..."
-  pnpm --filter @dbflow/api exec prisma db seed
-fi
+# 5) 시드는 api 부팅 시 BootstrapService가 수행 (개발은 항상 DBFLOW_DEMO=true)
 
 # 6) 기존 프로세스 정리 후 API/Web 백그라운드 기동
 "$ROOT/stop.sh" --apps-only >/dev/null 2>&1 || true
 
 log "API 서버 기동 (:3001)..."
-TZ="${TZ:-Asia/Seoul}" nohup pnpm --filter @dbflow/api start:dev >"$RUN_DIR/api.log" 2>&1 &
+TZ="${TZ:-Asia/Seoul}" DBFLOW_DEMO=true nohup pnpm --filter @dbflow/api start:dev >"$RUN_DIR/api.log" 2>&1 &
 echo $! > "$RUN_DIR/api.pid"
 
 log "Web 서버 기동 (:3000)..."

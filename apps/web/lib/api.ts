@@ -1,6 +1,6 @@
 import type { Role } from '@/lib/auth';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:3001';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api';
 
 // ---------------------------------------------------------------------------
 // Auth token helpers (재사용 가능한 인증 토큰 방식 — login 페이지가 저장한 값)

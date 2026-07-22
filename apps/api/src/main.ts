@@ -21,7 +21,13 @@ async function bootstrap() {
   app.useGlobalFilters(
     new AuditExceptionFilter(app.get(AuditService), app.get(HttpAdapterHost).httpAdapter),
   );
-  app.enableCors({ origin: true, credentials: true });
+  const corsOrigins = process.env.DBFLOW_CORS_ORIGINS?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  app.enableCors({
+    origin: corsOrigins?.length ? corsOrigins : true,
+    credentials: true,
+  });
   await app.listen(process.env.PORT ?? 3001);
 }
 bootstrap();

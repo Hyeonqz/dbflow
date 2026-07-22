@@ -26,7 +26,7 @@
 |---|---|---|
 | api/web 컨테이너화 | ❌ Dockerfile·`.dockerignore` 없음. `docker/docker-compose.yml`은 개발용 MySQL만 기동 | 프로덕션 멀티스테이지 Dockerfile 2개 + 전체 스택 compose(mysql+api+web) |
 | 마이그레이션 실행 | ⚠️ `start.sh`가 호스트에서 `prisma migrate deploy` 수동 실행 | api 컨테이너 entrypoint에서 `migrate deploy` 후 기동 |
-| web→api 주소 | ❌ `apps/web/lib/api.ts`의 `NEXT_PUBLIC_API_BASE`가 **빌드타임** 변수(기본 `localhost:3001`) → Hub에 올린 이미지에 주소가 박힘 | Next.js rewrites로 same-origin 프록시(`/api/*` → api) 전환. **Docker Hub 배포의 선결 조건** |
+| web→api 주소 | ❌ `apps/web/lib/api.ts`의 `NEXT_PUBLIC_API_BASE`가 **빌드타임** 변수(기본 `localhost:3001`) → Hub에 올린 이미지에 주소가 박힘 | Route Handler same-origin 프록시(`/api/*` → api) 전환. **Docker Hub 배포의 선결 조건** |
 | 시크릿 기본값 | ❌ `JWT_SECRET` 기본 `change-me-in-prod`로 **조용히 부팅**(auth.module.ts), `.env.example`의 `APP_ENCRYPTION_KEY`는 전부 0 | 기본/약한 시크릿이면 부팅 거부(fail-fast) |
 | 최초 관리자 | ❌ seed가 데모 계정 4개(`password1234`) 무조건 생성 | env 부트스트랩(§4-C), 데모 시드는 opt-in 플래그로 분리 |
 | env 문서화 | ⚠️ 루트 `.env.example`만 존재(api용), web용 없음 | api/web `.env.example` 정비 + 설정 레퍼런스 문서 |
@@ -39,7 +39,7 @@
 - **A. 라이선스** — ✅ **확정(2026-07-22): AGPL-3.0**(수익 모델=오픈코어+수익 여지 결정에 따름). 저작권자(본인)는 CLA 기반 **듀얼 라이선스**로 상용판 판매 가능. 코어=AGPL, 향후 엔터프라이즈 애드온/호스팅/지원은 별도. 수용한 트레이드오프: 네트워크 카피레프트가 일부 엔터프라이즈 도입을 저해할 수 있음. 부수 의무: 공개 전 의존성 라이선스 AGPL 호환성 감사(§5-5 체크리스트).
   - **오픈코어 경계(초안)**: 무료 AGPL 코어 = 통제 절차 전체(작성→검토→다중결재→위임→SoD→작업창→적용→롤백→감사). 향후 유료 후보 = SSO/SCIM(엔터프라이즈 인증), 고급 감사 리포트/컴플라이언스 증빙 번들, 멀티테넌시/조직관리, 우선 지원·SLA. (경계는 M2 이후 별도 확정 — 지금은 전부 코어.)
 - **B. 배포 방식** — ✅ **확정(2026-07-22): 둘 다 지원.** git clone + compose(소스 빌드)와 Docker Hub 이미지 pull 모두 1급 경로. 구현 순서는 clone+compose 먼저(패키징 산출물이 Hub 이미지의 재료), 이어서 CI로 Hub push.
-- **C. 최초 관리자** — ✅ **확정: fail-fast + env**. `DBFLOW_ADMIN_EMAIL`/`DBFLOW_ADMIN_PASSWORD` 미설정이면 **부팅 거부**(Keycloak식). 최초 기동 시 해당 관리자 1회 생성. 데모 시드 4계정은 `DBFLOW_DEMO=true`일 때만.
+- **C. 최초 관리자** — ✅ **확정: fail-fast + env**. **사용자 0명(최초 기동)인데** `DBFLOW_ADMIN_EMAIL`/`DBFLOW_ADMIN_PASSWORD` 미설정·`DBFLOW_DEMO`≠true면 **부팅 거부**(Keycloak식 — 기동 후엔 env 제거 가능). env 설정 시 해당 관리자 1회 생성(기존 계정 덮어쓰지 않음). 데모 시드 4계정은 `DBFLOW_DEMO=true`일 때만.
 - **D. 로케일 전략** — ✅ **확정: 쿠키+미들웨어**(URL 불변). next-intl, 언어 전환 UI는 프로필/헤더. URL prefix는 미채택.
 
 ## 5. 트랙 1 — 패키징·공개 (필요 작업)
@@ -48,10 +48,10 @@
 
 1. **컨테이너화**: api/web 프로덕션 Dockerfile(멀티스테이지, pnpm workspace 대응) + `.dockerignore` + 전체 스택 compose(mysql `mysqldata` 볼륨 유지, api는 `depends_on: mysql: condition: service_healthy`로 기동 순서 보장). api entrypoint에서 `prisma migrate deploy` 후 기동.
    - 함정 체크리스트(리뷰 반영): ⓐ Prisma `binaryTargets`를 대상 플랫폼(amd64/arm64·베이스 이미지 libc)에 맞게 지정 ⓑ `prisma` CLI와 seed 실행기(`ts-node`)는 devDependency — migrate/seed를 실행하는 레이어에 CLI가 살아남도록 구성 ⓒ web `next.config.js`에 `output: 'standalone'` 추가(이미지 슬림화) ⓓ `argon2` 네이티브 애드온이 선택한 베이스 이미지(특히 alpine/musl)에서 동작하는지 선검증.
-2. **web API 프록시 전환**: `NEXT_PUBLIC_API_BASE` 의존 제거, Next.js rewrites same-origin 프록시(`/api/*` → api, 내부 주소는 `next start` 기동 시 런타임 env로 해석). 사전 빌드 이미지가 어떤 호스트에서도 동작하는 조건. 부수 효과: 브라우저 CORS 문제 소멸 — §5-3의 CORS 하드닝은 api를 직접 노출하는 배포에만 해당. 의도된 트레이드오프: 감사 export 다운로드 포함 전 api 트래픽이 Next 서버를 경유(사내 도구 규모에서 허용).
+2. **web API 프록시 전환**: `NEXT_PUBLIC_API_BASE` 의존 제거, **Route Handler** same-origin 프록시(`app/api/[...path]/route.ts` → api, 요청 시점에 런타임 env로 대상 해석). ~~rewrites~~는 빌드 시 `routes-manifest.json`에 구워져 런타임 env를 못 읽으므로 미채택(M1 설계에서 정정). 사전 빌드 이미지가 어떤 호스트에서도 동작하는 조건. 부수 효과: 브라우저 CORS 문제 소멸 — §5-3의 CORS 하드닝은 api를 직접 노출하는 배포에만 해당. 의도된 트레이드오프: 감사 export 다운로드 포함 전 api 트래픽이 Next 서버를 경유(사내 도구 규모에서 허용).
 3. **보안 하드닝**: 부팅 env 검증을 `main.ts` 부트스트랩 **단일 지점**에서 수행 — 기본 `JWT_SECRET`(기본값이 auth.module.ts와 jwt.strategy.ts **두 곳**에 존재), 전부 0인 `APP_ENCRYPTION_KEY`, §4-C 관리자 env 미설정 시 부팅 거부. CORS 프로덕션 설정(직접 노출 배포용) + `/health` 엔드포인트(compose healthcheck 연동).
 4. **관리자 부트스트랩 + 데모 시드 분리**(§4-C): `DBFLOW_ADMIN_EMAIL`/`DBFLOW_ADMIN_PASSWORD` 필수(미설정 시 부팅 거부), 최초 기동 시 1회 생성. 데모 4계정은 `DBFLOW_DEMO=true`일 때만. **M1 범위** — 클린 `compose up` 후 로그인 가능해야 M1 완료(사용자를 만드는 경로가 seed뿐이므로, 이것 없이는 부팅돼도 로그인 불가).
-5. **문서·라이선스**: LICENSE(AGPL-3.0) · 영문 README 퀵스타트(두 진입 경로 + **평가 모드**(`DBFLOW_DEMO=true` 원커맨드 체험) vs **프로덕션 모드** 구분) · 설정 레퍼런스 · CONTRIBUTING · SECURITY · issue/PR 템플릿 · CODE_OF_CONDUCT · semver 버저닝 규칙. **공개 전 체크리스트**: git 히스토리 시크릿 스캔, 의존성 라이선스 AGPL 호환성 감사.
+5. **문서·라이선스**: LICENSE(AGPL-3.0) · 영문 README 퀵스타트(두 진입 경로 + **평가 모드**(`DBFLOW_DEMO=true` 원커맨드 체험) vs **프로덕션 모드** 구분) · 설정 레퍼런스 · CONTRIBUTING · SECURITY · issue/PR 템플릿 · CODE_OF_CONDUCT · semver 버저닝 규칙. **공개 전 체크리스트**: git 히스토리 시크릿 스캔, 의존성 라이선스 AGPL 호환성 감사, 루트 `package.json`의 `"license": "Apache-2.0"` 필드를 AGPL-3.0으로 정정(§4-A 결정과 현재 충돌).
 6. **운영 배포 가이드**: TLS 종단(리버스 프록시 예시) + `X-Forwarded-*`/trust proxy 처리 — 감사 로그의 클라이언트 IP가 프록시 뒤에서 프록시 IP로 찍히지 않게. DB 볼륨 백업/복구 가이드(적용 전 백업이 DB에 저장되므로 DB 볼륨 유실 = 백업 유실).
 7. **배포 자동화**: GitHub Actions CI(빌드/테스트/lint) + 태그 시 Docker Hub 이미지 push(멀티아치 amd64/arm64) + 릴리스·체인지로그.
 

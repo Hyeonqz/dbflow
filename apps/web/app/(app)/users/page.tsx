@@ -23,7 +23,10 @@ export default function UsersPage() {
   const seqRef = useRef(0);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q), 300);
+    const t = setTimeout(() => {
+      setDebouncedQ(q);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [q]);
 
@@ -77,6 +80,7 @@ export default function UsersPage() {
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <select
             className={inputClass}
+            aria-label="역할"
             value={role}
             onChange={(e) => {
               setPage(1);
@@ -92,10 +96,10 @@ export default function UsersPage() {
           </select>
           <input
             className={inputClass}
+            aria-label="이름·이메일 검색"
             placeholder="이름 또는 이메일 검색"
             value={q}
             onChange={(e) => {
-              setPage(1);
               setQ(e.target.value);
             }}
           />

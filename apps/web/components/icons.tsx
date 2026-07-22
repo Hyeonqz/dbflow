@@ -127,6 +127,12 @@ export const AlertIcon = (p: SVGProps<SVGSVGElement>) => (
   </Base>
 );
 
+export const ChevronIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M15 5 8 12l7 7" />
+  </Base>
+);
+
 export const UserSwitchIcon = (p: SVGProps<SVGSVGElement>) => (
   <Base {...p}>
     <circle cx="8" cy="8" r="3.25" />

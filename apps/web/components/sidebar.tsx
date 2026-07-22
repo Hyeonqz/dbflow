@@ -5,7 +5,7 @@ import type { SVGProps } from 'react';
 import { usePathname } from 'next/navigation';
 import { ROLE_LABEL, logout, type Role, type User } from '@/lib/auth';
 import { ThemeToggle } from '@/components/theme';
-import { CalendarIcon, ClipboardIcon, DatabaseIcon, DiffIcon, HomeIcon, ShieldCheckIcon, ShieldIcon, UsersCheckIcon, UsersIcon, UserSwitchIcon } from '@/components/icons';
+import { CalendarIcon, ChevronIcon, ClipboardIcon, DatabaseIcon, DiffIcon, HomeIcon, ShieldCheckIcon, ShieldIcon, UsersCheckIcon, UsersIcon, UserSwitchIcon } from '@/components/icons';
 
 type NavItem = {
   href: string;
@@ -35,16 +35,41 @@ const NAV: NavItem[] = [
   { href: '/apply-schedule', label: '작업창·동결', Icon: CalendarIcon, roles: ['ADMIN'] },
 ];
 
-export function Sidebar({ user, onNavigate }: { user: User; onNavigate?: () => void }) {
+export function Sidebar({
+  user,
+  onNavigate,
+  collapsed = false,
+  onToggle,
+}: {
+  user: User;
+  onNavigate?: () => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
   const pathname = usePathname();
   const items = NAV.filter((it) => !it.roles || it.roles.includes(user.role));
 
   return (
     <div className="flex h-full flex-col">
-      <div className="px-5 py-5">
-        <Link href="/dashboard" onClick={onNavigate} className="text-xl font-bold text-ink">
-          DBFlow
+      <div className={collapsed ? 'flex flex-col items-center gap-2 px-2 py-4' : 'px-5 py-5'}>
+        <Link
+          href="/dashboard"
+          onClick={onNavigate}
+          className="text-xl font-bold text-ink"
+        >
+          {collapsed ? 'DB' : 'DBFlow'}
         </Link>
+        {onToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            aria-expanded={!collapsed}
+            className="focusable inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted hover:bg-subtle hover:text-ink"
+          >
+            <ChevronIcon className={collapsed ? 'rotate-180' : ''} />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 space-y-1 px-3">
@@ -56,37 +81,41 @@ export function Sidebar({ user, onNavigate }: { user: User; onNavigate?: () => v
               href={it.href}
               onClick={onNavigate}
               aria-current={active ? 'page' : undefined}
+              title={collapsed ? it.label : undefined}
+              aria-label={collapsed ? it.label : undefined}
               className={`focusable flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                active ? 'bg-primary text-white' : 'text-muted hover:bg-subtle hover:text-ink'
-              }`}
+                collapsed ? 'justify-center' : ''
+              } ${active ? 'bg-primary text-white' : 'text-muted hover:bg-subtle hover:text-ink'}`}
             >
               <it.Icon className="shrink-0" />
-              <span>{it.label}</span>
+              {!collapsed && <span>{it.label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      <div className="space-y-3 border-t border-border px-3 py-4">
-        <ThemeToggle />
-        <div className="px-2">
-          <p className="text-sm">
-            <span className="font-semibold text-ink">{user.name}</span>{' '}
-            <span className="text-muted">| {user.department}</span>
-          </p>
-          <p className="text-xs text-muted">{ROLE_LABEL[user.role]}</p>
+      {!collapsed && (
+        <div className="space-y-3 border-t border-border px-3 py-4">
+          <ThemeToggle />
+          <div className="px-2">
+            <p className="text-sm">
+              <span className="font-semibold text-ink">{user.name}</span>{' '}
+              <span className="text-muted">| {user.department}</span>
+            </p>
+            <p className="text-xs text-muted">{ROLE_LABEL[user.role]}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              window.location.href = '/login';
+            }}
+            className="focusable w-full rounded-2xl bg-subtle px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-border-strong"
+          >
+            로그아웃
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            logout();
-            window.location.href = '/login';
-          }}
-          className="focusable w-full rounded-2xl bg-subtle px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-border-strong"
-        >
-          로그아웃
-        </button>
-      </div>
+      )}
     </div>
   );
 }

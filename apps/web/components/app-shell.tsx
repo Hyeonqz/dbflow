@@ -8,8 +8,22 @@ import { MenuIcon } from '@/components/icons';
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, ready } = useUser();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
+
+  // 사이드바 접힘 상태 복원 (마운트 후 1회, SSR 가드 자동)
+  useEffect(() => {
+    setCollapsed(localStorage.getItem('dbflow.sidebar.collapsed') === '1');
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem('dbflow.sidebar.collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
 
   // Esc로 드로어 닫기
   useEffect(() => {
@@ -39,8 +53,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen lg:flex">
       {/* 데스크톱: 고정 사이드바 */}
-      <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:sticky lg:top-0 lg:block lg:h-screen">
-        <Sidebar user={user} />
+      <aside
+        className={`hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 lg:sticky lg:top-0 lg:block lg:h-screen ${
+          collapsed ? 'lg:w-16' : 'lg:w-64'
+        }`}
+      >
+        <Sidebar user={user} collapsed={collapsed} onToggle={toggleCollapsed} />
       </aside>
 
       {/* 모바일: 상단바 */}

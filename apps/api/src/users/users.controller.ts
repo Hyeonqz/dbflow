@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { QueryAdminUsersDto } from './dto/query-admin-users.dto';
 
 @Controller('users')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -23,6 +24,12 @@ export class UsersController {
   @Get()
   list(@Query('role') role?: Role) {
     return role ? this.users.listByRole(role) : [];
+  }
+
+  @Get('admin')
+  @Roles(Role.ADMIN)
+  adminList(@Query() q: QueryAdminUsersDto) {
+    return this.users.adminList(q);
   }
 
   @Get('me')

@@ -65,3 +65,39 @@ describe('UsersService', () => {
     );
   });
 });
+
+function svc(overrides: any = {}) {
+  const prisma: any = {
+    user: {
+      findMany: overrides.findMany ?? (() => Promise.resolve([])),
+      count: overrides.count ?? (() => Promise.resolve(0)),
+    },
+  };
+  return new UsersService(prisma, { record: () => Promise.resolve() } as any);
+}
+
+describe('UsersService.adminList', () => {
+  it('applies role filter and name/email search to where, paginates', async () => {
+    let args: any = null;
+    const s = svc({
+      findMany: (a: any) => { args = a; return Promise.resolve([{ id: 'u1' }]); },
+      count: () => Promise.resolve(42),
+    });
+    const res = await s.adminList({ page: 2, role: 'DEVELOPER' as any, q: 'kim' });
+    expect(args.where).toMatchObject({ role: 'DEVELOPER' });
+    expect(args.where.OR).toEqual([{ name: { contains: 'kim' } }, { email: { contains: 'kim' } }]);
+    expect(args.skip).toBe(20); // (page2-1)*20
+    expect(args.take).toBe(20);
+    expect(args.select.passwordHash).toBeUndefined(); // 노출 금지
+    expect(res).toMatchObject({ total: 42, page: 2, pageSize: 20 });
+  });
+
+  it('defaults page to 1 and omits role/OR when not given', async () => {
+    let args: any = null;
+    const s = svc({ findMany: (a: any) => { args = a; return Promise.resolve([]); } });
+    await s.adminList({});
+    expect(args.skip).toBe(0);
+    expect(args.where.role).toBeUndefined();
+    expect(args.where.OR).toBeUndefined();
+  });
+});

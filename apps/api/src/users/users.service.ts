@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { hashPassword } from '../auth/password.util';
-import { AuditAction, AuditTargetType, Role, User } from '@prisma/client';
+import { AuditAction, AuditTargetType, Prisma, Role, User } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { AuditActorSnapshot } from '../audit/audit.types';
 
@@ -47,6 +47,26 @@ export class UsersService {
       select: { id: true, name: true, department: true },
       orderBy: { name: 'asc' },
     });
+  }
+
+  async adminList(q: { page?: number; role?: Role; q?: string }) {
+    const pageSize = 20;
+    const page = q.page && q.page > 0 ? q.page : 1;
+    const where: Prisma.UserWhereInput = {
+      ...(q.role ? { role: q.role } : {}),
+      ...(q.q ? { OR: [{ name: { contains: q.q } }, { email: { contains: q.q } }] } : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: { id: true, email: true, name: true, department: true, role: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
   }
 
   async profile(id: string) {

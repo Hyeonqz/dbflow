@@ -1,36 +1,44 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useUser } from '@/components/user-context';
-import { createUser, listUsersByRole, type AdminUserInput, type UserSummary } from '@/lib/api';
+import { adminListUsers, createUser, type AdminUser, type AdminUserInput, type Paginated } from '@/lib/api';
 import { ROLE_LABEL, type Role } from '@/lib/auth';
 import { PageHeader } from '@/components/page-header';
+import { formatDateTime } from '@/lib/format';
 
 const ROLE_OPTIONS: Role[] = ['DEVELOPER', 'REVIEWER', 'APPROVER', 'ADMIN'];
-// 목록용 조회 대상. api의 listUsersByRole은 REVIEWER/APPROVER만 지원한다.
-// ponytail: DEVELOPER/ADMIN 목록까지 필요해지면 api 시그니처를 넓히고 여기 추가.
-const LISTABLE_ROLES: Array<'REVIEWER' | 'APPROVER'> = ['REVIEWER', 'APPROVER'];
 
 const inputClass =
   'w-full rounded-2xl bg-card px-4 py-3 outline-none ring-1 ring-border-strong focus:ring-primary';
 
-type ListedUser = UserSummary & { role: 'REVIEWER' | 'APPROVER' };
-
 export default function UsersPage() {
   const { user, ready } = useUser();
-  const [items, setItems] = useState<ListedUser[] | null>(null);
+  const [role, setRole] = useState<Role | ''>('');
+  const [q, setQ] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<Paginated<AdminUser> | null>(null);
   const [error, setError] = useState('');
+  const seqRef = useRef(0);
 
-  const load = useCallback(() => {
-    return Promise.all(LISTABLE_ROLES.map((role) => listUsersByRole(role).then((users) => users.map((u) => ({ ...u, role })))))
-      .then((groups) => setItems(groups.flat()))
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const load = useCallback((p: number, r: Role | '', query: string) => {
+    const my = ++seqRef.current;
+    adminListUsers({ page: p, role: r, q: query })
+      .then((res) => {
+        if (my === seqRef.current) setResult(res);
+      })
       .catch((err: Error) => setError(err.message));
   }, []);
 
   useEffect(() => {
-    if (!ready || user?.role !== 'ADMIN') return;
-    load();
-  }, [ready, user, load]);
+    if (user?.role === 'ADMIN') load(page, role, debouncedQ);
+  }, [page, role, debouncedQ, load, user]);
 
   if (!ready || !user) {
     return <p className="text-muted">불러오는 중…</p>;
@@ -42,9 +50,11 @@ export default function UsersPage() {
     );
   }
 
+  const totalPages = result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1;
+
   return (
     <div className="space-y-6">
-      <PageHeader title="사용자 관리" description="새 사용자를 등록하고 역할별 목록을 확인합니다." />
+      <PageHeader title="사용자 관리" description="새 사용자를 등록하고 전체 역할 목록을 확인합니다." />
 
       {error && (
         <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-300">{error}</p>
@@ -56,7 +66,7 @@ export default function UsersPage() {
           onError={setError}
           onSubmit={async (values) => {
             await createUser(values);
-            await load();
+            load(page, role, debouncedQ);
           }}
         />
       </section>
@@ -64,29 +74,88 @@ export default function UsersPage() {
       <section>
         <h2 className="text-base font-semibold text-ink">사용자 목록</h2>
 
-        {!error && items === null && <p className="mt-3 text-muted">불러오는 중…</p>}
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+          <select
+            className={inputClass}
+            value={role}
+            onChange={(e) => {
+              setPage(1);
+              setRole(e.target.value as Role | '');
+            }}
+          >
+            <option value="">전체</option>
+            {ROLE_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABEL[r]}
+              </option>
+            ))}
+          </select>
+          <input
+            className={inputClass}
+            placeholder="이름 또는 이메일 검색"
+            value={q}
+            onChange={(e) => {
+              setPage(1);
+              setQ(e.target.value);
+            }}
+          />
+        </div>
 
-        {!error && items !== null && items.length === 0 && (
+        {!error && result === null && <p className="mt-3 text-muted">불러오는 중…</p>}
+
+        {!error && result !== null && result.items.length === 0 && (
           <div className="mt-3 rounded-2xl bg-card px-6 py-12 text-center ring-1 ring-border">
             <p className="text-muted">등록된 사용자가 없습니다.</p>
           </div>
         )}
 
-        <ul className="mt-3 space-y-3">
-          {items?.map((u) => (
-            <li key={`${u.role}-${u.id}`} className="rounded-2xl bg-card p-4 ring-1 ring-border">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-ink">{u.name}</p>
-                  <p className="mt-1 text-sm text-muted">{u.department}</p>
-                </div>
-                <span className="rounded-full bg-subtle px-3 py-1 text-xs font-medium text-muted">
-                  {ROLE_LABEL[u.role]}
-                </span>
+        {result !== null && result.items.length > 0 && (
+          <>
+            <ul className="mt-3 space-y-3">
+              {result.items.map((u) => (
+                <li key={u.id} className="rounded-2xl bg-card p-4 ring-1 ring-border">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-ink">{u.name}</p>
+                      <p className="mt-1 text-sm text-muted">{u.email}</p>
+                      <p className="mt-1 text-sm text-muted">{u.department}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="rounded-full bg-subtle px-3 py-1 text-xs font-medium text-muted">
+                        {ROLE_LABEL[u.role]}
+                      </span>
+                      <p className="mt-1 text-xs text-muted">{formatDateTime(u.createdAt)}</p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-4 flex items-center justify-between text-sm text-muted">
+              <span>
+                총 {result.total}건 · {result.page}/{totalPages} 페이지
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="focusable rounded-2xl bg-card px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
+                >
+                  이전
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="focusable rounded-2xl bg-card px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
+                >
+                  다음
+                </button>
               </div>
-            </li>
-          ))}
-        </ul>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

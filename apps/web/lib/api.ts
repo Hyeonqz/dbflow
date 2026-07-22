@@ -525,6 +525,18 @@ export function createUser(input: AdminUserInput) {
   return apiFetch<{ id: string }>(`/users`, { method: 'POST', body: JSON.stringify(input) });
 }
 
+export type AdminUser = { id: string; email: string; name: string; department: string; role: Role; createdAt: string };
+export type Paginated<T> = { items: T[]; total: number; page: number; pageSize: number };
+
+/** 전 역할 페이징 목록 (ADMIN 전용). role=''(전체)은 미전송해 @IsEnum 400을 회피한다. */
+export function adminListUsers(params: { page?: number; role?: Role | ''; q?: string }) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set('page', String(params.page));
+  if (params.role) qs.set('role', params.role);
+  if (params.q && params.q.trim()) qs.set('q', params.q.trim());
+  return apiFetch<Paginated<AdminUser>>(`/users/admin?${qs.toString()}`);
+}
+
 export function getMyProfile() {
   return apiFetch<{ id: string; email: string; name: string; department: string; role: Role; telegramLinked: boolean }>(`/users/me`);
 }

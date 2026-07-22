@@ -1,0 +1,374 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DEVELOPER
+  REVIEWER
+  APPROVER
+  ADMIN
+}
+
+enum TargetEnv {
+  DEV
+  STAGING
+  PROD
+}
+
+enum SqlType {
+  DDL
+  DML
+}
+
+enum ChangeRequestStatus {
+  DRAFT
+  SUBMITTED
+  REVIEW_APPROVED
+  REVIEW_REJECTED
+  FINAL_APPROVED
+  FINAL_REJECTED
+  APPLIED
+}
+
+enum DbType {
+  MYSQL
+  POSTGRES
+  MARIADB
+  ORACLE
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum ExecutionKind {
+  APPLY
+  ROLLBACK
+}
+
+enum BackupScope {
+  SCHEMA_AND_DATA
+  SCHEMA_ONLY
+}
+
+enum BackupStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  department   String
+  passwordHash String
+  role         Role
+  telegramChatId String?
+  createdAt    DateTime @default(now())
+
+  changeRequests    ChangeRequest[] @relation("author")
+  reviewingRequests ChangeRequest[] @relation("reviewer")
+  statusHistories   StatusHistory[]
+  executions        Execution[]
+  assignedApprovals ChangeRequestApprover[] @relation("assignedApprover")
+  createdFreezes    FreezePeriod[]          @relation("freezeCreator")
+  delegationsGiven    Delegation[]            @relation("delegator")
+  delegationsReceived Delegation[]            @relation("delegate")
+  delegationsCreated  Delegation[]            @relation("delegationCreator")
+  approverDecisions   ChangeRequestApprover[] @relation("approverDecider")
+}
+
+model ChangeRequest {
+  id          String              @id @default(cuid())
+  title       String
+  description String
+  targetEnv   TargetEnv
+  status      ChangeRequestStatus @default(DRAFT)
+  authorId    String
+  reviewerId  String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  author        User                @relation("author",   fields: [authorId],   references: [id])
+  reviewer      User?               @relation("reviewer", fields: [reviewerId], references: [id])
+  files         ChangeRequestFile[]
+  statusHistory StatusHistory[]
+  executions    Execution[]
+  backups       Backup[]
+  approvers     ChangeRequestApprover[]
+
+  @@index([authorId])
+  @@index([status])
+  @@index([reviewerId])
+}
+
+enum ApprovalDecision {
+  APPROVE
+  REJECT
+}
+
+model ApprovalPolicy {
+  id                String    @id @default(cuid())
+  env               TargetEnv @unique
+  requiredApprovals Int       @default(1)
+  updatedAt         DateTime  @updatedAt
+
+  @@map("approval_policy")
+}
+
+model ChangeRequestApprover {
+  id              String            @id @default(cuid())
+  changeRequestId String
+  userId          String
+  order           Int
+  decision        ApprovalDecision?
+  comment         String?           @db.Text
+  decidedAt       DateTime?
+  decidedById String?
+  decidedBy   User?   @relation("approverDecider", fields: [decidedById], references: [id])
+
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  user          User          @relation("assignedApprover", fields: [userId], references: [id])
+
+  @@unique([changeRequestId, userId])
+  @@index([userId])
+  @@map("change_request_approver")
+}
+
+model ChangeRequestFile {
+  id              String  @id @default(cuid())
+  changeRequestId String
+  filename        String
+  sqlType         SqlType
+  content         String  @db.Text
+  order           Int
+
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+
+  @@index([changeRequestId])
+}
+
+model StatusHistory {
+  id              String              @id @default(cuid())
+  changeRequestId String
+  fromStatus      ChangeRequestStatus
+  toStatus        ChangeRequestStatus
+  actorId         String
+  comment         String?
+  createdAt       DateTime            @default(now())
+
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  actor         User          @relation(fields: [actorId], references: [id])
+
+  @@index([changeRequestId])
+}
+
+model TargetDatabase {
+  id          String   @id @default(cuid())
+  name        String
+  env         TargetEnv
+  dbType      DbType   @default(MYSQL)
+  host        String
+  port        Int
+  username    String
+  passwordEnc String   @db.Text
+  database    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  executions Execution[]
+  backups    Backup[]
+
+  @@index([env])
+}
+
+model Execution {
+  id               String          @id @default(cuid())
+  changeRequestId  String
+  targetDatabaseId String
+  kind             ExecutionKind   @default(APPLY)
+  status           ExecutionStatus @default(PENDING)
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  triggeredById    String
+  backupId         String?
+  createdAt        DateTime        @default(now())
+
+  changeRequest  ChangeRequest   @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  targetDatabase TargetDatabase  @relation(fields: [targetDatabaseId], references: [id])
+  triggeredBy    User            @relation(fields: [triggeredById], references: [id])
+  backup         Backup?         @relation(fields: [backupId], references: [id])
+  steps          ExecutionStep[]
+
+  @@index([changeRequestId])
+  @@index([targetDatabaseId])
+  @@index([status])
+}
+
+model Backup {
+  id               String       @id @default(cuid())
+  changeRequestId  String
+  targetDatabaseId String
+  scope            BackupScope
+  status           BackupStatus
+  location         String       @default("DB")
+  payload          String       @db.LongText
+  sizeBytes        Int
+  note             String?      @db.Text
+  createdAt        DateTime     @default(now())
+
+  changeRequest  ChangeRequest  @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  targetDatabase TargetDatabase @relation(fields: [targetDatabaseId], references: [id])
+  executions     Execution[]
+
+  @@index([changeRequestId])
+  @@index([targetDatabaseId])
+}
+
+model ExecutionStep {
+  id           String          @id @default(cuid())
+  executionId  String
+  filename     String
+  order        Int
+  status       ExecutionStatus @default(PENDING)
+  error        String?         @db.Text
+  rowsAffected Int?
+  durationMs   Int?
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+}
+
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILURE
+  ACCESS_DENIED
+  USER_CREATED
+  USER_PROFILE_UPDATED
+  CR_CREATED
+  CR_SUBMITTED
+  CR_REVIEWED
+  CR_APPROVED
+  CR_ASSIGNEES_CHANGED
+  CR_APPLIED
+  CR_ROLLED_BACK
+  TARGET_DB_CREATED
+  TARGET_DB_UPDATED
+  TARGET_DB_DELETED
+  SQL_POLICY_UPDATED
+  APPROVAL_POLICY_UPDATED
+  APPLY_WINDOW_UPDATED
+  FREEZE_UPDATED
+  DELEGATION_UPDATED
+}
+
+enum AuditTargetType {
+  CHANGE_REQUEST
+  USER
+  TARGET_DATABASE
+  EXECUTION
+  AUTH
+  SQL_REVIEW_POLICY
+  APPROVAL_POLICY
+  APPLY_SCHEDULE
+  DELEGATION
+}
+
+enum SqlReviewLevel {
+  DISABLED
+  INFO
+  WARN
+  BLOCK
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+}
+
+model AuditLog {
+  id         String          @id @default(cuid())
+  createdAt  DateTime        @default(now())
+  actorId    String?
+  actorName  String?
+  actorRole  String?
+  actorDept  String?
+  action     AuditAction
+  targetType AuditTargetType
+  targetId   String?
+  summary    String          @db.Text
+  metadata   Json?
+  outcome    AuditOutcome    @default(SUCCESS)
+  ip         String?
+  userAgent  String?         @db.Text
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@map("audit_log")
+}
+
+model SqlReviewRule {
+  id        String         @id @default(cuid())
+  env       TargetEnv
+  ruleKey   String
+  level     SqlReviewLevel
+  updatedAt DateTime       @updatedAt
+
+  @@unique([env, ruleKey])
+  @@index([env])
+  @@map("sql_review_rule")
+}
+
+model ApplyWindow {
+  id          String    @id @default(cuid())
+  env         TargetEnv
+  dayOfWeek   Int       // 0=일 ~ 6=토
+  startMinute Int       // 0~1439 (02:00 = 120)
+  endMinute   Int       // exclusive, 최대 1440(=24:00)
+  @@index([env])
+  @@map("apply_window")
+}
+
+model FreezePeriod {
+  id          String    @id @default(cuid())
+  env         TargetEnv
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String
+  createdById String
+  createdBy   User      @relation("freezeCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  @@index([env])
+  @@map("freeze_period")
+}
+
+model Delegation {
+  id          String   @id @default(cuid())
+  delegatorId String
+  delegateId  String
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  delegator User @relation("delegator", fields: [delegatorId], references: [id])
+  delegate  User @relation("delegate", fields: [delegateId], references: [id])
+  createdBy User @relation("delegationCreator", fields: [createdById], references: [id])
+
+  @@index([delegatorId])
+  @@index([delegateId])
+  @@map("delegation")
+}

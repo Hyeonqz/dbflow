@@ -1,0 +1,21 @@
+name: project-dbflow
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: dbflow
+      MYSQL_USER: dbflow
+      MYSQL_PASSWORD: dbflow
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysqldata:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  mysqldata:

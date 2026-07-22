@@ -1,0 +1,11 @@
+{
+  "name": "dbflow",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "api:dev": "pnpm --filter @dbflow/api start:dev",
+    "web:dev": "pnpm --filter @dbflow/web dev",
+    "api:test": "pnpm --filter @dbflow/api test"
+  }
+}

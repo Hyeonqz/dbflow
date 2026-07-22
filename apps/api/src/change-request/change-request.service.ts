@@ -1,0 +1,535 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  ApprovalDecision,
+  AuditAction,
+  AuditTargetType,
+  ChangeRequestStatus,
+  Prisma,
+  Role,
+} from '@prisma/client';
+import { ApprovalPolicyService } from '../approval-policy/approval-policy.service';
+import { AuditService } from '../audit/audit.service';
+import { DelegationService } from '../delegation/delegation.service';
+import { CurrentUserPayload } from '../auth/current-user.decorator';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateChangeRequestDto } from './dto/create-change-request.dto';
+import { Decision, DecisionDto } from './dto/decision.dto';
+import { getNextStatus, TransitionAction } from './change-request.state-machine';
+
+export interface AuthUser {
+  userId: string;
+  role: Role;
+}
+
+/** Non-APPLY transitions driven through `applyTransition` (APPLY is handled by the apply engine). */
+type CrTransitionAction = Exclude<TransitionAction, 'APPLY'>;
+
+const AUDIT_ACTION_BY_TRANSITION: Record<CrTransitionAction, AuditAction> = {
+  SUBMIT: AuditAction.CR_SUBMITTED,
+  REVIEW_APPROVE: AuditAction.CR_REVIEWED,
+  REVIEW_REJECT: AuditAction.CR_REVIEWED,
+  FINAL_APPROVE: AuditAction.CR_APPROVED,
+  FINAL_REJECT: AuditAction.CR_APPROVED,
+};
+const AUDIT_SUMMARY: Record<CrTransitionAction, string> = {
+  SUBMIT: '제출',
+  REVIEW_APPROVE: '검토 승인',
+  REVIEW_REJECT: '검토 반려',
+  FINAL_APPROVE: '최종 승인',
+  FINAL_REJECT: '최종 반려',
+};
+
+const DETAIL_INCLUDE = {
+  files: { orderBy: { order: 'asc' } },
+  statusHistory: {
+    orderBy: { createdAt: 'asc' },
+    include: { actor: { select: { name: true } } },
+  },
+  author: { select: { name: true } },
+  reviewer: { select: { name: true, department: true } },
+  approvers: {
+    orderBy: { order: 'asc' },
+    select: {
+      userId: true,
+      order: true,
+      decision: true,
+      comment: true,
+      decidedAt: true,
+      decidedById: true,
+      decidedBy: { select: { name: true } },
+      user: { select: { name: true, department: true } },
+    },
+  },
+} satisfies Prisma.ChangeRequestInclude;
+
+const SUMMARY_SELECT = {
+  id: true,
+  title: true,
+  targetEnv: true,
+  status: true,
+  authorId: true,
+  createdAt: true,
+  updatedAt: true,
+  author: { select: { name: true } },
+  reviewerId: true,
+  reviewer: { select: { name: true, department: true } },
+  approvers: {
+    orderBy: { order: 'asc' },
+    select: { userId: true, decision: true, user: { select: { name: true } } },
+  },
+} satisfies Prisma.ChangeRequestSelect;
+
+type DetailPayload = Prisma.ChangeRequestGetPayload<{ include: typeof DETAIL_INCLUDE }>;
+type SummaryPayload = Prisma.ChangeRequestGetPayload<{ select: typeof SUMMARY_SELECT }>;
+
+@Injectable()
+export class ChangeRequestService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly policy: ApprovalPolicyService,
+    private readonly delegation: DelegationService,
+  ) {}
+
+  async create(actor: CurrentUserPayload, dto: CreateChangeRequestDto) {
+    await this.assertAssigneeRoles(dto.reviewerId, dto.approverIds);
+    const created = await this.prisma.changeRequest.create({
+      data: {
+        title: dto.title,
+        description: dto.description,
+        targetEnv: dto.targetEnv,
+        authorId: actor.userId,
+        reviewerId: dto.reviewerId ?? null,
+        approvers: {
+          create: (dto.approverIds ?? []).map((userId, i) => ({ userId, order: i })),
+        },
+        files: {
+          create: dto.files.map((file, index) => ({
+            filename: file.filename,
+            sqlType: file.sqlType,
+            content: file.content,
+            order: index,
+          })),
+        },
+      },
+      include: DETAIL_INCLUDE,
+    });
+    await this.audit.record({
+      actor,
+      action: AuditAction.CR_CREATED,
+      targetType: AuditTargetType.CHANGE_REQUEST,
+      targetId: created.id,
+      summary: '변경요청 생성',
+      metadata: { targetEnv: dto.targetEnv, reviewerId: dto.reviewerId, approverIds: dto.approverIds },
+    });
+    return this.toDetail(created);
+  }
+
+  async list(user: AuthUser) {
+    const delegatorIds = await this.delegatorIdsFor(user);
+    const rows = await this.prisma.changeRequest.findMany({
+      where: this.visibilityWhere(user, delegatorIds),
+      orderBy: { createdAt: 'desc' },
+      select: SUMMARY_SELECT,
+    });
+    return rows.map((row) => this.toSummary(row, user.userId, delegatorIds));
+  }
+
+  async findOne(user: AuthUser, id: string) {
+    const delegatorIds = await this.delegatorIdsFor(user);
+    const changeRequest = await this.prisma.changeRequest.findFirst({
+      where: { id, ...this.visibilityWhere(user, delegatorIds) },
+      include: DETAIL_INCLUDE,
+    });
+    if (!changeRequest) {
+      throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+    }
+    return this.toDetail(changeRequest, user.userId, delegatorIds);
+  }
+
+  /** critic Minor4 — only reviewers/approvers can act as delegates; others short-circuit. */
+  private async delegatorIdsFor(user: AuthUser): Promise<string[]> {
+    if (user.role !== Role.REVIEWER && user.role !== Role.APPROVER) return [];
+    return this.delegation.activeDelegatorIds(user.userId);
+  }
+
+  async submit(actor: CurrentUserPayload, id: string) {
+    const changeRequest = await this.getOrThrow(id);
+    if (changeRequest.authorId !== actor.userId) {
+      throw new ForbiddenException('작성자만 제출할 수 있습니다.');
+    }
+    const required = await this.policy.getRequired(changeRequest.targetEnv);
+    const count = await this.prisma.changeRequestApprover.count({ where: { changeRequestId: id } });
+    if (!changeRequest.reviewerId || count !== required) {
+      throw new BadRequestException(`제출하려면 검토자 1명과 결재자 ${required}명을 지정해야 합니다.`);
+    }
+    return this.applyTransition(changeRequest, 'SUBMIT', actor, null);
+  }
+
+  async review(actor: CurrentUserPayload, id: string, dto: DecisionDto) {
+    const action: CrTransitionAction =
+      dto.decision === Decision.APPROVE ? 'REVIEW_APPROVE' : 'REVIEW_REJECT';
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM ChangeRequest WHERE id = ${id} FOR UPDATE`;
+      const cr = await tx.changeRequest.findUnique({
+        where: { id },
+        select: { id: true, status: true, reviewerId: true },
+      });
+      if (!cr) throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      const rid = cr.reviewerId;
+      const isDirect = rid === actor.userId;
+      const isDelegate =
+        !isDirect && !!rid && (await this.delegation.isActiveDelegateFor(actor.userId, rid));
+      if (!isDirect && !isDelegate)
+        throw new ForbiddenException('지정된 검토자 또는 활성 대리인만 검토할 수 있습니다.');
+      const toStatus = getNextStatus(cr.status, action); // 이미 전이됨이면 throw → 이중 검토 차단
+      const delegatorName = isDelegate
+        ? (await tx.user.findUnique({ where: { id: rid! }, select: { name: true } }))?.name ?? null
+        : null;
+      await tx.changeRequest.update({ where: { id }, data: { status: toStatus } });
+      await tx.statusHistory.create({
+        data: {
+          changeRequestId: id,
+          fromStatus: cr.status,
+          toStatus,
+          actorId: actor.userId,
+          comment: this.withDelegateNote(dto.comment, delegatorName),
+        },
+      });
+      await tx.auditLog.create({
+        data: this.audit.buildData({
+          actor,
+          action: AuditAction.CR_REVIEWED,
+          targetType: AuditTargetType.CHANGE_REQUEST,
+          targetId: id,
+          summary: `검토 ${action === 'REVIEW_APPROVE' ? '승인' : '반려'} (CR ${id})`,
+          metadata: {
+            fromStatus: cr.status,
+            toStatus,
+            comment: dto.comment ?? undefined,
+            onBehalfOf: isDelegate ? rid : undefined,
+          },
+        }),
+      });
+    });
+    return this.findOne(actor, id);
+  }
+
+  /** Appends a "(위임: X 대리)" suffix to the comment when acting as a delegate. */
+  private withDelegateNote(
+    comment: string | null | undefined,
+    delegatorName: string | null,
+  ): string | null {
+    const base = comment ?? null;
+    if (!delegatorName) return base;
+    return `${base ? base + ' ' : ''}(위임: ${delegatorName} 대리)`;
+  }
+
+  async approve(actor: CurrentUserPayload, id: string, dto: DecisionDto) {
+    // 대리 위임자 목록은 CR 행 잠금 밖에서 읽는다(위임 테이블은 CR과 무관).
+    const delegatorIds = await this.delegation.activeDelegatorIds(actor.userId);
+    const authorId = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM ChangeRequest WHERE id = ${id} FOR UPDATE`;
+      const cr = await tx.changeRequest.findUnique({
+        where: { id },
+        select: { id: true, status: true, authorId: true },
+      });
+      if (!cr) throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      if (cr.status !== ChangeRequestStatus.REVIEW_APPROVED)
+        throw new ConflictException(`현재 상태(${cr.status})에서는 결재할 수 없습니다.`);
+      const mine = await tx.changeRequestApprover.findUnique({
+        where: { changeRequestId_userId: { changeRequestId: id, userId: actor.userId } },
+      });
+      let slot = mine && mine.decision === null ? mine : null;
+      let onBehalfOf: string | null = null;
+      let delegatorName: string | null = null;
+      if (!slot && delegatorIds.length) {
+        const del = await tx.changeRequestApprover.findFirst({
+          where: { changeRequestId: id, userId: { in: delegatorIds }, decision: null },
+          orderBy: { order: 'asc' },
+          include: { user: { select: { name: true } } },
+        });
+        if (del) {
+          slot = del;
+          onBehalfOf = del.userId;
+          delegatorName = del.user?.name ?? null;
+        }
+      }
+      if (!slot) {
+        if (mine && mine.decision !== null) throw new ConflictException('이미 결재하셨습니다.');
+        throw new ForbiddenException('지정된 결재자 또는 활성 대리인만 결재할 수 있습니다.');
+      }
+
+      const decision: ApprovalDecision =
+        dto.decision === Decision.APPROVE ? ApprovalDecision.APPROVE : ApprovalDecision.REJECT;
+      await tx.changeRequestApprover.update({
+        where: { id: slot.id },
+        data: {
+          decision,
+          comment: dto.comment ?? null,
+          decidedAt: new Date(),
+          decidedById: onBehalfOf ? actor.userId : null,
+        },
+      });
+
+      const all = await tx.changeRequestApprover.findMany({
+        where: { changeRequestId: id },
+        select: { decision: true },
+      });
+      const approved = all.filter((a) => a.decision === ApprovalDecision.APPROVE).length;
+      const progress = `${approved}/${all.length}`;
+      const transition: CrTransitionAction | null =
+        decision === ApprovalDecision.REJECT
+          ? 'FINAL_REJECT'
+          : approved === all.length
+            ? 'FINAL_APPROVE'
+            : null;
+
+      if (transition) {
+        const toStatus = getNextStatus(cr.status, transition);
+        await tx.changeRequest.update({ where: { id }, data: { status: toStatus } });
+        await tx.statusHistory.create({
+          data: {
+            changeRequestId: id,
+            fromStatus: cr.status,
+            toStatus,
+            actorId: actor.userId,
+            comment: this.withDelegateNote(dto.comment, delegatorName),
+          },
+        });
+      }
+      await tx.auditLog.create({
+        data: this.audit.buildData({
+          actor,
+          action: AuditAction.CR_APPROVED,
+          targetType: AuditTargetType.CHANGE_REQUEST,
+          targetId: id,
+          summary:
+            transition === 'FINAL_APPROVE'
+              ? `최종 승인 (CR ${id})`
+              : transition === 'FINAL_REJECT'
+                ? `최종 반려 (CR ${id})`
+                : `결재 진행 ${progress} (CR ${id})`,
+          metadata: {
+            decision,
+            progress,
+            comment: dto.comment ?? undefined,
+            delegatedFrom: onBehalfOf ?? undefined,
+          },
+        }),
+      });
+      return cr.authorId;
+    });
+    return this.findOne({ userId: authorId, role: Role.DEVELOPER }, id);
+  }
+
+  // --- internals -----------------------------------------------------------
+
+  /** spec §4.2 — 지정된 검토자/결재자가 실제로 해당 역할을 가졌는지 검증. */
+  private async assertAssigneeRoles(reviewerId?: string | null, approverIds?: string[] | null) {
+    if (reviewerId) {
+      const r = await this.prisma.user.findUnique({
+        where: { id: reviewerId },
+        select: { role: true },
+      });
+      if (!r || r.role !== Role.REVIEWER)
+        throw new BadRequestException('검토자는 REVIEWER여야 합니다.');
+    }
+    if (approverIds && approverIds.length) {
+      if (new Set(approverIds).size !== approverIds.length)
+        throw new BadRequestException('결재자가 중복되었습니다.');
+      const rows = await this.prisma.user.findMany({
+        where: { id: { in: approverIds } },
+        select: { id: true, role: true },
+      });
+      if (rows.length !== approverIds.length || rows.some((u) => u.role !== Role.APPROVER))
+        throw new BadRequestException('결재자는 모두 APPROVER여야 합니다.');
+    }
+  }
+
+  private async getOrThrow(id: string) {
+    const changeRequest = await this.prisma.changeRequest.findUnique({
+      where: { id },
+      select: { id: true, status: true, authorId: true, reviewerId: true, targetEnv: true },
+    });
+    if (!changeRequest) {
+      throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+    }
+    return changeRequest;
+  }
+
+  /**
+   * Validates the transition via the state machine, then atomically updates the
+   * status and appends a StatusHistory entry. Returns the refreshed detail view.
+   */
+  private async applyTransition(
+    changeRequest: { id: string; status: ChangeRequestStatus },
+    action: CrTransitionAction,
+    actor: CurrentUserPayload,
+    comment: string | null,
+  ) {
+    const toStatus = getNextStatus(changeRequest.status, action);
+    await this.prisma.$transaction([
+      this.prisma.changeRequest.update({
+        where: { id: changeRequest.id },
+        data: { status: toStatus },
+      }),
+      this.prisma.statusHistory.create({
+        data: {
+          changeRequestId: changeRequest.id,
+          fromStatus: changeRequest.status,
+          toStatus,
+          actorId: actor.userId,
+          comment,
+        },
+      }),
+      this.prisma.auditLog.create({
+        data: this.audit.buildData({
+          actor: { userId: actor.userId, name: actor.name, role: actor.role, department: actor.department },
+          action: AUDIT_ACTION_BY_TRANSITION[action],
+          targetType: AuditTargetType.CHANGE_REQUEST,
+          targetId: changeRequest.id,
+          summary: `${AUDIT_SUMMARY[action]} (CR ${changeRequest.id})`,
+          metadata: { fromStatus: changeRequest.status, toStatus, comment: comment ?? undefined },
+        }),
+      }),
+    ]);
+    const refreshed = await this.prisma.changeRequest.findUniqueOrThrow({
+      where: { id: changeRequest.id },
+      include: DETAIL_INCLUDE,
+    });
+    return this.toDetail(refreshed);
+  }
+
+  /** Flattens the joined author/reviewer names and approver decisions onto a summary row. */
+  private toSummary(row: SummaryPayload, currentUserId: string, delegatorIds: string[] = []) {
+    const { author, reviewer, approvers, ...rest } = row;
+    const approved = approvers.filter((a) => a.decision === 'APPROVE').length;
+    return {
+      ...rest,
+      authorName: author?.name ?? null,
+      reviewerName: reviewer?.name ?? null,
+      approverNames: approvers.map((a) => a.user?.name ?? null),
+      approvalProgress: { approved, required: approvers.length },
+      myApprovalPending:
+        rest.status === ChangeRequestStatus.REVIEW_APPROVED &&
+        approvers.some(
+          (a) =>
+            (a.userId === currentUserId || delegatorIds.includes(a.userId)) && a.decision === null,
+        ),
+    };
+  }
+
+  /** Flattens denormalized author/reviewer/approver/actor display names for the detail view. */
+  private toDetail(
+    changeRequest: DetailPayload,
+    currentUserId?: string,
+    delegatorIds: string[] = [],
+  ) {
+    const { author, reviewer, approvers, statusHistory, ...rest } = changeRequest;
+    return {
+      ...rest,
+      authorName: author?.name ?? null,
+      reviewerName: reviewer?.name ?? null,
+      approvers: approvers.map((a) => ({
+        userId: a.userId,
+        name: a.user?.name ?? null,
+        department: a.user?.department ?? null,
+        order: a.order,
+        decision: a.decision,
+        comment: a.comment,
+        decidedAt: a.decidedAt,
+        decidedBy: a.decidedBy?.name ?? null,
+      })),
+      canActAsDelegate:
+        (rest.status === ChangeRequestStatus.SUBMITTED &&
+          !!delegatorIds.length &&
+          delegatorIds.includes(rest.reviewerId ?? '')) ||
+        (rest.status === ChangeRequestStatus.REVIEW_APPROVED &&
+          approvers.some((a) => delegatorIds.includes(a.userId) && a.decision === null)),
+      statusHistory: statusHistory.map((history) => {
+        const { actor, ...entry } = history;
+        return { ...entry, actorName: actor?.name ?? null };
+      }),
+    };
+  }
+
+  /** Role-based visibility filter — see docs/plan2-api-contract.md §3.2 / spec §4.2. */
+  private visibilityWhere(
+    user: AuthUser,
+    delegatorIds: string[] = [],
+  ): Prisma.ChangeRequestWhereInput {
+    switch (user.role) {
+      case Role.DEVELOPER:
+        return { authorId: user.userId };
+      case Role.REVIEWER:
+        return {
+          OR: [{ reviewerId: user.userId }, { reviewerId: { in: delegatorIds } }],
+          status: { not: ChangeRequestStatus.DRAFT },
+        };
+      case Role.APPROVER:
+        return {
+          OR: [
+            { approvers: { some: { userId: user.userId } } },
+            { approvers: { some: { userId: { in: delegatorIds } } } },
+          ],
+          status: { not: ChangeRequestStatus.DRAFT },
+        };
+      default:
+        // ADMIN 및 미지정 역할은 목록에서 아무것도 못 봄(관리자는 /users 사용).
+        return { id: { equals: '' } };
+    }
+  }
+
+  /**
+   * Reassigns the reviewer/approver. Allowed while DRAFT (author only) or at
+   * any time by an ADMIN. Returns the refreshed detail, read via the author's
+   * visibility context since ADMIN visibility sees nothing (see visibilityWhere).
+   */
+  async setAssignees(
+    user: CurrentUserPayload,
+    id: string,
+    dto: { reviewerId?: string; approverIds?: string[] },
+  ) {
+    const cr = await this.getOrThrow(id);
+    const isDraft = cr.status === ChangeRequestStatus.DRAFT;
+    const allowed = (isDraft && cr.authorId === user.userId) || user.role === Role.ADMIN;
+    if (!allowed) {
+      throw new ForbiddenException(
+        'DRAFT 상태에서는 작성자만, 제출 후에는 관리자만 지정을 변경할 수 있습니다.',
+      );
+    }
+    await this.assertAssigneeRoles(dto.reviewerId, dto.approverIds);
+    if (dto.approverIds !== undefined && !isDraft) {
+      const required = await this.policy.getRequired(cr.targetEnv);
+      if (dto.approverIds.length !== required) {
+        throw new BadRequestException(`제출된 요청은 결재자 ${required}명을 지정해야 합니다.`);
+      }
+    }
+    await this.prisma.$transaction(async (tx) => {
+      if (dto.reviewerId !== undefined)
+        await tx.changeRequest.update({ where: { id }, data: { reviewerId: dto.reviewerId } });
+      if (dto.approverIds !== undefined) {
+        await tx.changeRequestApprover.deleteMany({ where: { changeRequestId: id } });
+        await tx.changeRequestApprover.createMany({
+          data: dto.approverIds.map((userId, i) => ({ changeRequestId: id, userId, order: i })),
+        });
+      }
+    });
+    await this.audit.record({
+      actor: user,
+      action: AuditAction.CR_ASSIGNEES_CHANGED,
+      targetType: AuditTargetType.CHANGE_REQUEST,
+      targetId: id,
+      summary: '지정자 변경',
+      metadata: { reviewerId: dto.reviewerId, approverIds: dto.approverIds },
+    });
+    return this.findOne({ userId: cr.authorId, role: Role.DEVELOPER }, id);
+  }
+}

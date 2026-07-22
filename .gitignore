@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.next/
+.env
+*.log
+.DS_Store
+.omc/
+.run/
+.idea/
+
+# AI / local working assets — must never be committed
+.claude/
+.codex/
+.superpowers/
+CLAUDE.md
+AGENTS.md
+docs/
+
+# git worktrees (local, per-branch checkouts)
+.worktrees/

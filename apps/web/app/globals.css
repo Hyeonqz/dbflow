@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f2f4f6;
+  --card: #ffffff;
+  --subtle: #f2f4f6;
+  --border: #eaecef;
+  --border-strong: #dbdfe4;
+  --ink: #191f28;
+  /* 데이터 텍스트에 광범위 사용 → 흰 카드 위 WCAG AA(4.5:1) 충족하도록 상향(구 #8b95a1은 3.1:1). */
+  --muted: #6b7684;
+  --primary: #3182f6;
+  --primary-dark: #1b64da;
+  --code: #191f28;
+  --code-fg: #e5e7eb;
+}
+
+.dark {
+  --bg: #0f1115;
+  --card: #181b20;
+  --subtle: #22262e;
+  --border: #2a2f37;
+  --border-strong: #3a4049;
+  --ink: #e9edf1;
+  --muted: #9aa5b1;
+  --primary: #4b93f7;
+  --primary-dark: #1b64da;
+  --code: #0d1117;
+  --code-fg: #e5e7eb;
+}
+
+body { @apply bg-bg text-ink antialiased; }
+
+@layer components {
+  /* 앱 전역 주 버튼: hover(데스크톱)·active(터치)·키보드 focus 상태를 한 곳에서 보장. */
+  .btn-primary {
+    @apply rounded-2xl bg-primary font-semibold text-white transition-colors
+           hover:bg-primary-dark active:bg-primary-dark
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary
+           focus-visible:ring-offset-2 focus-visible:ring-offset-bg
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* 링크·카드·행 등 비버튼 인터랙티브 요소용 키보드 포커스 링. */
+  .focusable {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary
+           focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+  }
+}
+
+/* 모션 민감 사용자 존중: 트랜지션·애니메이션 최소화. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

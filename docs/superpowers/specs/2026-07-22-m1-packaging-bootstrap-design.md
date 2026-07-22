@@ -26,7 +26,8 @@
 ### 1. api 이미지 — `apps/api/Dockerfile`
 
 - 베이스 `node:22-bookworm-slim`(glibc — `argon2` 프리빌드 호환, alpine/musl 회피). corepack으로 pnpm 활성화.
-- **build 스테이지**: 리포 루트 컨텍스트에서 workspace `pnpm install` → `prisma generate` → `nest build`.
+- **runtime 스테이지에 `openssl`·`ca-certificates`·`tzdata` 설치** — Prisma 쿼리 엔진(libssl)과 `TZ=Asia/Seoul` 적용(zoneinfo)에 필요. slim 이미지의 대표적 Prisma 런타임 실패 원인.
+- **build 스테이지**: 리포 루트 컨텍스트에서 workspace `pnpm install --frozen-lockfile` → `prisma generate` → `nest build`.
 - **runtime 스테이지**: `pnpm deploy --filter @dbflow/api --prod`로 프루닝된 `node_modules` + `dist/` + `prisma/`(schema + migrations).
 - `prisma` CLI를 devDependencies → dependencies로 승격 (entrypoint의 `migrate deploy` 실행에 필요).
 - entrypoint: `prisma migrate deploy && node dist/main.js`. (`depends_on: service_healthy`로 MySQL 준비 후 실행되므로 재시도 루프는 두지 않음 — compose `restart: on-failure`가 안전망)
@@ -40,14 +41,17 @@
   - Authorization·Content-Type 헤더와 body를 그대로 전달, 응답은 스트리밍(감사 export 다운로드 포함). `Accept-Language`도 전달(M3 §6-5 대비).
   - `export const dynamic = 'force-dynamic'`.
 - `lib/api.ts`: `API_BASE` 기본값 `'http://localhost:3001'` → `'/api'`. `NEXT_PUBLIC_API_BASE` 오버라이드는 유지(프록시 우회 탈출구). 개발 모드(`next dev`)도 동일하게 프록시 경유 — dev/prod 경로 단일화.
-- runtime 스테이지: `.next/standalone` + `.next/static` + `public` 복사, `node server.js`.
+- runtime 스테이지: `.next/standalone` + `.next/static` + `public` 복사, `HOSTNAME=0.0.0.0 PORT=3000 node server.js`.
+- web 이미지는 **빌드 인자 불필요** — `NEXT_PUBLIC_API_BASE`는 `/api` 폴백이 있고 페이지가 전부 클라이언트 컴포넌트라 빌드 시 API 접근 없음. 구현 시 불필요한 `ARG`를 추가하지 말 것.
 
 ### 3. 부트스트랩 — seed.ts 대체 (api 앱 코드)
 
 **env 검증(`main.ts` 최상단, NestFactory 이전 단일 지점)**:
+- `main.ts` 첫 줄에서 `apps/api/.env`를 **명시적으로 로드**(Node 22 내장 `process.loadEnvFile`, 파일 없으면 무시) — 현재는 `@prisma/client` import의 암묵적 .env 로딩에 의존하고 있어 취약.
 - `JWT_SECRET`: 미설정 또는 `change-me-in-prod` → 부팅 거부. `auth.module.ts`·`jwt.strategy.ts`의 fallback 기본값 제거(env 필수화).
 - `APP_ENCRYPTION_KEY`: 64자 hex가 아니거나 전부 0 → 부팅 거부.
 - 거부 시 stderr에 원인과 해결법(생성 명령 포함) 출력 후 `process.exit(1)`.
+- **jest 대응**: fallback 제거로 `jwt.strategy.spec.ts` 등이 env 없이 깨지므로 `jest.config.js`에 `setupFiles`로 테스트용 `JWT_SECRET`/`APP_ENCRYPTION_KEY` 주입 파일을 추가.
 
 **`BootstrapService`(신규 모듈, `onApplicationBootstrap`)**:
 1. `DBFLOW_ADMIN_EMAIL`/`DBFLOW_ADMIN_PASSWORD`가 설정돼 있고 해당 이메일 계정이 없으면 ADMIN 생성(argon2 해시). 이미 있으면 아무것도 안 함(비밀번호 덮어쓰지 않음).
@@ -56,33 +60,40 @@
 - `prisma/seed.ts` 삭제, `package.json`의 `prisma.seed` 항목 제거.
 
 **start.sh 변경**:
-- `--seed` 플래그 → api 기동 env에 `DBFLOW_DEMO=true` 전달로 대체(플래그 이름은 호환 유지).
+- **개발 기동은 항상 `DBFLOW_DEMO=true`로 api를 실행** — 빈 DB에서 plain `./start.sh`가 부트스트랩 거부로 크래시 루프에 빠지는 회귀 방지(데모 upsert는 멱등이라 반복 기동 무해). `--seed` 플래그는 no-op 호환 유지.
 - 최초 `.env` 생성 시(`.env.example` 복사 직후) `JWT_SECRET`·`APP_ENCRYPTION_KEY`를 `openssl rand -hex 32`로 치환 — fail-fast와 개발 편의 양립.
-- 안내 문구의 데모 계정 로그인 정보는 `--seed`(데모) 기동일 때만 출력.
+- **기존 개발자 마이그레이션**: 이미 있는 `apps/api/.env`가 기본 시크릿이면 fail-fast에 걸림 — start.sh가 기본값 감지 시 안내 메시지(재생성 방법) 출력 후 중단.
 
 ### 4. compose — 루트 `docker-compose.yml` + env 단일화
 
 ```yaml
+name: dbflow            # 개발 스택(project-dbflow)과 프로젝트명 분리 — 컨테이너/볼륨 충돌 방지
 services:
-  mysql:    # 기존 docker/docker-compose.yml과 동일 구성 + 볼륨/healthcheck, 단 mysql-init(전역 GRANT)은 미마운트
+  mysql:    # mysql:8.0, healthcheck는 dev compose와 동일 형태
+            # 볼륨은 dbflow_mysql_data (dev의 mysqldata와 별개 — 데이터 섞임 방지)
+            # ports 미공개 (api가 mysql:3306으로 내부 접근; dev 스택의 3306 공개와 충돌 방지)
+            # mysql-init(전역 GRANT)은 미마운트
   api:      # build: context=., dockerfile=apps/api/Dockerfile
-            # depends_on: mysql(condition: service_healthy)
+            # depends_on: mysql(condition: service_healthy), restart: on-failure
+            # env_file: .env  ← JWT_SECRET, APP_ENCRYPTION_KEY, DBFLOW_ADMIN_*, DBFLOW_DEMO, BACKUP_MAX_ROWS 주입
+            # environment: DATABASE_URL=mysql://dbflow:${MYSQL_PASSWORD}@mysql:3306/dbflow (env_file의 localhost 값 오버라이드), TZ=Asia/Seoul
             # healthcheck: GET /health (node fetch 원라이너 — slim엔 curl 없음)
-            # ports 미공개(내부 전용), TZ=Asia/Seoul
+            # ports 미공개(내부 전용)
   web:      # build: context=., dockerfile=apps/web/Dockerfile
-            # depends_on: api(condition: service_healthy), ports: 3000:3000
-            # DBFLOW_API_URL=http://api:3001
+            # depends_on: api(condition: service_healthy), restart: on-failure
+            # environment: DBFLOW_API_URL=http://api:3001
+            # ports: 3000:3000
 ```
 
-- **api 포트 외부 미공개** — 모든 트래픽이 web 프록시 경유. 브라우저 CORS 소멸. api 직접 노출이 필요한 배포용으로 `DBFLOW_CORS_ORIGINS` env만 추가(콤마 구분 목록, 미설정 시 현행 `origin: true` 유지).
-- compose 변수는 루트 `.env`에서(compose 기본 동작). **루트 `.env.example` 하나를 확장**해 start.sh(개발)와 compose(프로덕션)가 공유: 기존 항목 + `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `DBFLOW_ADMIN_EMAIL`, `DBFLOW_ADMIN_PASSWORD`, `DBFLOW_DEMO=false`, `DBFLOW_CORS_ORIGINS`(주석).
-- api의 `DATABASE_URL`은 compose에서 `mysql://dbflow:${MYSQL_PASSWORD}@mysql:3306/dbflow`로 조립.
-- `docker/docker-compose.yml`(개발 DB)·`stop.sh`는 무변경.
-- 루트 `.dockerignore` 신설: `node_modules`, `.next`, `dist`, `.run`, `.git`, `docs`, `*.md` 등.
+- **compose의 루트 `.env`는 변수 보간용일 뿐 컨테이너에 자동 주입되지 않음** — api 서비스에 `env_file: .env`를 명시하고, `DATABASE_URL`처럼 컨테이너 안에서 달라져야 하는 값은 `environment:`로 오버라이드(위 스케치). 이것이 빠지면 fail-fast가 즉시 부팅 거부하므로 종료 기준 1 실패.
+- **api 포트 외부 미공개** — 모든 트래픽이 web 프록시 경유. 브라우저 CORS 소멸. api 직접 노출이 필요한 배포용으로 `DBFLOW_CORS_ORIGINS` env만 추가(콤마 구분·trim, 미설정 시 현행 `origin: true` 유지).
+- **루트 `.env.example` 하나를 확장**해 start.sh(개발)와 compose(프로덕션)가 공유: 기존 항목 + `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `DBFLOW_ADMIN_EMAIL`, `DBFLOW_ADMIN_PASSWORD`, `DBFLOW_DEMO=false`, `DBFLOW_CORS_ORIGINS`(주석).
+- `docker/docker-compose.yml`(개발 DB)·`stop.sh`는 무변경. dev 스택과 prod 스택은 프로젝트명·볼륨·포트가 분리되어 한 머신에서 공존 가능(단 web/api 호스트 포트 3000은 동시 사용 불가 — 알려진 제약으로 문서화).
+- 루트 `.dockerignore` 신설: `node_modules`, `.next`, `dist`, `.run`, `.git`, `docs`, `*.md`, **`.env`·`**/.env`(시크릿이 이미지 레이어에 들어가는 것 방지 — start.sh가 실제 시크릿을 생성하므로 필수)**.
 
 ### 5. `/health` 엔드포인트
 
-- api에 `GET /health`(무인증, JwtAuthGuard 제외) — `SELECT 1` DB ping 포함, `{ status: 'ok' }` 반환. compose healthcheck과 web `depends_on` 조건이 사용.
+- **기존 `health.controller.ts` 확장**(신설 아님 — 무인증 `{ status: 'ok' }`는 이미 존재): PrismaService 주입해 `SELECT 1` DB ping 추가. compose healthcheck과 web `depends_on` 조건이 사용.
 
 ## env 레퍼런스 (M1 이후)
 
@@ -104,11 +115,13 @@ services:
 2. **fail-fast 3케이스**: 기본 JWT_SECRET / 제로 암호화키 / (빈 DB에서) admin env 없음 — 각각 비정상 종료 + 원인 메시지 확인.
 3. **데모 모드**: `DBFLOW_DEMO=true` 기동 → `dev@dbflow.io` 로그인 성공.
 4. **멱등성**: 같은 스택 재기동(`down` 없이 `up`) 시 admin 재생성/에러 없음.
-5. **개발 회귀**: `./start.sh` → 웹/API 기동, `./start.sh --seed` → 데모 로그인. jest 테스트 전체 통과.
+5. **개발 회귀**: **빈 DB(볼륨 삭제 후)에서 plain `./start.sh`** → 데모 계정 로그인까지 동작(크래시 루프 없음), 기존 DB에서도 정상. jest 테스트 전체 통과.
+5-1. **dev/prod 공존**: dev 스택(`./start.sh`)이 떠 있는 상태에서 루트 `docker compose up` 시 컨테이너·볼륨·3306 충돌 없음(호스트 3000 포트만 상호 배타).
 6. **프록시 경유 다운로드**: 감사 로그 export가 프록시를 통해 정상 다운로드되는지 확인.
 
 ## 리스크와 대응
 
 - **pnpm deploy와 prisma engines**: `pnpm deploy --prod`가 `.prisma/client` 생성물을 누락할 수 있음 → runtime 스테이지에서 `prisma generate`를 deploy 결과물 위에서 실행하거나 build 스테이지 생성물을 명시 복사. 구현 시 이미지 기동 테스트로 확정.
 - **Route Handler 프록시의 body 처리**: multipart/대용량 body는 스트림 전달로 처리. 현재 api는 JSON 위주라 위험 낮음.
-- **auth.module fallback 제거**: e2e/unit 테스트가 JWT_SECRET env 없이 돌던 경우 테스트 셋업에 env 주입 필요 — 테스트 통과를 종료 기준에 포함해 회귀 방지.
+- **auth.module fallback 제거**: e2e/unit 테스트가 JWT_SECRET env 없이 돌던 경우 jest `setupFiles`로 env 주입(§3) — 테스트 통과를 종료 기준에 포함해 회귀 방지.
+- **마이그레이션 실패 시 UX**: entrypoint의 `migrate deploy` 실패 → `restart: on-failure`로 재시도 루프, 운영자 신호는 컨테이너 로그뿐. M1에서는 수용(로그에 원인 명시), 개선은 후속.

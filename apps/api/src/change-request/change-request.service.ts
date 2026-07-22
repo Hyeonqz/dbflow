@@ -266,6 +266,24 @@ export class ChangeRequestService {
         throw new ForbiddenException('지정된 결재자 또는 활성 대리인만 결재할 수 있습니다.');
       }
 
+      // 직무분리(SoD): 한 사람이 직접·대리를 합쳐 한 CR에 최대 한 슬롯만 채울 수 있다.
+      const priorByActor = await tx.changeRequestApprover.findFirst({
+        where: {
+          changeRequestId: id,
+          id: { not: slot.id },
+          OR: [
+            { userId: actor.userId, decision: { not: null } },
+            { decidedById: actor.userId },
+          ],
+        },
+        select: { id: true },
+      });
+      if (priorByActor) {
+        throw new ConflictException(
+          '직무분리 정책상 한 변경요청에 두 번(직접·대리 포함) 결재할 수 없습니다.',
+        );
+      }
+
       const decision: ApprovalDecision =
         dto.decision === Decision.APPROVE ? ApprovalDecision.APPROVE : ApprovalDecision.REJECT;
       await tx.changeRequestApprover.update({
@@ -433,6 +451,9 @@ export class ChangeRequestService {
     delegatorIds: string[] = [],
   ) {
     const { author, reviewer, approvers, statusHistory, ...rest } = changeRequest;
+    const actorAlreadyActed =
+      approvers.some((a) => a.userId === currentUserId && a.decision !== null) ||
+      approvers.some((a) => a.decidedById === currentUserId);
     return {
       ...rest,
       authorName: author?.name ?? null,
@@ -447,12 +468,14 @@ export class ChangeRequestService {
         decidedAt: a.decidedAt,
         decidedBy: a.decidedBy?.name ?? null,
       })),
+      iAlreadyActed: actorAlreadyActed,
       canActAsDelegate:
-        (rest.status === ChangeRequestStatus.SUBMITTED &&
+        !actorAlreadyActed &&
+        ((rest.status === ChangeRequestStatus.SUBMITTED &&
           !!delegatorIds.length &&
           delegatorIds.includes(rest.reviewerId ?? '')) ||
         (rest.status === ChangeRequestStatus.REVIEW_APPROVED &&
-          approvers.some((a) => delegatorIds.includes(a.userId) && a.decision === null)),
+          approvers.some((a) => delegatorIds.includes(a.userId) && a.decision === null))),
       statusHistory: statusHistory.map((history) => {
         const { actor, ...entry } = history;
         return { ...entry, actorName: actor?.name ?? null };

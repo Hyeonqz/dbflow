@@ -621,12 +621,24 @@ function txPrisma(state: any) {
         Object.assign(r, data);
         return Promise.resolve({});
       },
-      findFirst: ({ where }: any) =>
-        Promise.resolve(
+      findFirst: ({ where }: any) => {
+        if (where.OR) {
+          // SoD 가드 조회: id != where.id.not && (본인 직접 결정 || 본인이 대리로 결정)
+          return Promise.resolve(
+            state.approvers.find(
+              (x: any) =>
+                x.id !== where.id?.not &&
+                ((x.userId === where.OR[0].userId && x.decision != null) ||
+                  x.decidedById === where.OR[1].decidedById),
+            ) ?? null,
+          );
+        }
+        return Promise.resolve( // 기존 위임 슬롯 조회
           state.approvers.find(
             (x: any) => where.userId.in.includes(x.userId) && x.decision === null,
           ) ?? null,
-        ),
+        );
+      },
       findMany: () => Promise.resolve(state.approvers),
     },
     statusHistory: { create: () => Promise.resolve({}) },
@@ -909,5 +921,201 @@ describe('delegation integration (부재 위임)', () => {
 
     expect(rows[0].myApprovalPending).toBe(true);
     expect(rows[1].myApprovalPending).toBe(false); // status gate holds even for a delegate
+  });
+});
+
+describe('SoD guard — one actor fills at most one approver slot per CR', () => {
+  it('직접 결재 후 같은 사람의 대리 슬롯 시도 → 409', async () => {
+    const state = {
+      cr: { id: 'c1', status: 'REVIEW_APPROVED', authorId: 'a' },
+      approvers: [
+        { id: 'x1', userId: 'p1', order: 0, decision: 'APPROVE', decidedById: null, user: { name: 'P1' } },
+        { id: 'x2', userId: 'p2', order: 1, decision: null, decidedById: null, user: { name: 'P2' } },
+      ],
+    };
+    const delegation = { activeDelegatorIds: async () => ['p2'], isActiveDelegateFor: async () => true };
+    const svcInstance = new ChangeRequestService(
+      txPrisma(state) as any,
+      { buildData: (x: any) => x } as any,
+      {} as any,
+      delegation as any,
+    );
+
+    await expect(
+      svcInstance.approve({ userId: 'p1', role: 'APPROVER' } as any, 'c1', { decision: 'APPROVE' } as any),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect((state.approvers[1] as any).decision).toBeNull(); // 대리 슬롯은 손대지 않음
+  });
+
+  it('대리로 P2 채운 뒤 같은 사람의 P3 대리 시도 → 409', async () => {
+    const state = {
+      cr: { id: 'c1', status: 'REVIEW_APPROVED', authorId: 'a' },
+      approvers: [
+        { id: 'x1', userId: 'p2', order: 0, decision: 'APPROVE', decidedById: 'p1', user: { name: 'P2' } },
+        { id: 'x2', userId: 'p3', order: 1, decision: null, decidedById: null, user: { name: 'P3' } },
+      ],
+    };
+    const delegation = {
+      activeDelegatorIds: async () => ['p2', 'p3'],
+      isActiveDelegateFor: async () => true,
+    };
+    const svcInstance = new ChangeRequestService(
+      txPrisma(state) as any,
+      { buildData: (x: any) => x } as any,
+      {} as any,
+      delegation as any,
+    );
+
+    await expect(
+      svcInstance.approve({ userId: 'p1', role: 'APPROVER' } as any, 'c1', { decision: 'APPROVE' } as any),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect((state.approvers[1] as any).decision).toBeNull();
+  });
+
+  it('대리로 P2 채운 뒤 같은 사람의 자기 직접 슬롯 시도 → 409', async () => {
+    const state = {
+      cr: { id: 'c1', status: 'REVIEW_APPROVED', authorId: 'a' },
+      approvers: [
+        { id: 'x1', userId: 'p2', order: 0, decision: 'APPROVE', decidedById: 'p1', user: { name: 'P2' } },
+        { id: 'x2', userId: 'p1', order: 1, decision: null, decidedById: null, user: { name: 'P1' } },
+      ],
+    };
+    const delegation = { activeDelegatorIds: async () => ['p2'], isActiveDelegateFor: async () => true };
+    const svcInstance = new ChangeRequestService(
+      txPrisma(state) as any,
+      { buildData: (x: any) => x } as any,
+      {} as any,
+      delegation as any,
+    );
+
+    await expect(
+      svcInstance.approve({ userId: 'p1', role: 'APPROVER' } as any, 'c1', { decision: 'APPROVE' } as any),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect((state.approvers[1] as any).decision).toBeNull(); // 본인 직접 슬롯도 손대지 않음
+  });
+
+  it('정상 1건(첫 결재)은 SoD 가드에 막히지 않고 통과한다', async () => {
+    const state = {
+      cr: { id: 'c1', status: 'REVIEW_APPROVED', authorId: 'a' },
+      approvers: [
+        { id: 'x1', userId: 'p1', order: 0, decision: null, decidedById: null, user: { name: 'P1' } },
+        { id: 'x2', userId: 'p2', order: 1, decision: null, decidedById: null, user: { name: 'P2' } },
+      ],
+    };
+    const svcInstance = new ChangeRequestService(
+      txPrisma(state) as any,
+      { buildData: (x: any) => x } as any,
+      {} as any,
+      delegationMock,
+    );
+
+    await svcInstance.approve(
+      { userId: 'p1', role: 'APPROVER', name: 'P1', department: 'd' } as any,
+      'c1',
+      { decision: 'APPROVE' } as any,
+    );
+
+    expect((state.approvers[0] as any).decision).toBe('APPROVE');
+    expect(state.cr.status).toBe('REVIEW_APPROVED'); // 1/2만 결재됨 — 아직 최종 승인 아님
+  });
+
+  it('SoD 409 메시지는 "이미 결재하셨습니다"와 다르다', async () => {
+    const state = {
+      cr: { id: 'c1', status: 'REVIEW_APPROVED', authorId: 'a' },
+      approvers: [
+        { id: 'x1', userId: 'p1', order: 0, decision: 'APPROVE', decidedById: null, user: { name: 'P1' } },
+        { id: 'x2', userId: 'p2', order: 1, decision: null, decidedById: null, user: { name: 'P2' } },
+      ],
+    };
+    const delegation = { activeDelegatorIds: async () => ['p2'], isActiveDelegateFor: async () => true };
+    const svcInstance = new ChangeRequestService(
+      txPrisma(state) as any,
+      { buildData: (x: any) => x } as any,
+      {} as any,
+      delegation as any,
+    );
+
+    await expect(
+      svcInstance.approve({ userId: 'p1', role: 'APPROVER' } as any, 'c1', { decision: 'APPROVE' } as any),
+    ).rejects.toMatchObject({ message: expect.stringContaining('직무분리') });
+    await expect(
+      svcInstance.approve({ userId: 'p1', role: 'APPROVER' } as any, 'c1', { decision: 'APPROVE' } as any),
+    ).rejects.not.toMatchObject({ message: '이미 결재하셨습니다.' });
+  });
+
+  describe('toDetail: iAlreadyActed / canActAsDelegate gating', () => {
+    it('이미 결정/대리한 뷰어 → canActAsDelegate=false, iAlreadyActed=true', async () => {
+      const delegation = { activeDelegatorIds: async () => ['boss'], isActiveDelegateFor: async () => false };
+      const { service, findFirstMock } = makeService(undefined, delegation);
+      findFirstMock.mockResolvedValueOnce({
+        id: 'cr1',
+        status: S.REVIEW_APPROVED,
+        authorId: 'u1',
+        reviewerId: null,
+        author: { name: '개발자' },
+        reviewer: null,
+        files: [],
+        statusHistory: [],
+        approvers: [
+          {
+            userId: 'p1',
+            order: 0,
+            decision: 'APPROVE',
+            comment: null,
+            decidedAt: new Date(),
+            decidedById: null,
+            decidedBy: null,
+            user: { name: 'P1' },
+          },
+          {
+            userId: 'boss',
+            order: 1,
+            decision: null,
+            comment: null,
+            decidedAt: null,
+            decidedById: null,
+            decidedBy: null,
+            user: { name: '보스' },
+          },
+        ],
+      });
+
+      const detail: any = await service.findOne({ userId: 'p1', role: Role.APPROVER }, 'cr1');
+
+      expect(detail.iAlreadyActed).toBe(true);
+      expect(detail.canActAsDelegate).toBe(false);
+    });
+
+    it('아직 안 한 활성 대리인 → canActAsDelegate=true, iAlreadyActed=false', async () => {
+      const delegation = { activeDelegatorIds: async () => ['boss'], isActiveDelegateFor: async () => false };
+      const { service, findFirstMock } = makeService(undefined, delegation);
+      findFirstMock.mockResolvedValueOnce({
+        id: 'cr1',
+        status: S.REVIEW_APPROVED,
+        authorId: 'u1',
+        reviewerId: null,
+        author: { name: '개발자' },
+        reviewer: null,
+        files: [],
+        statusHistory: [],
+        approvers: [
+          {
+            userId: 'boss',
+            order: 0,
+            decision: null,
+            comment: null,
+            decidedAt: null,
+            decidedById: null,
+            decidedBy: null,
+            user: { name: '보스' },
+          },
+        ],
+      });
+
+      const detail: any = await service.findOne({ userId: 'del1', role: Role.APPROVER }, 'cr1');
+
+      expect(detail.iAlreadyActed).toBe(false);
+      expect(detail.canActAsDelegate).toBe(true);
+    });
   });
 });

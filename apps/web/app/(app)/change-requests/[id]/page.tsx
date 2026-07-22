@@ -220,7 +220,7 @@ function ActionPanel({
   const canReview = role === 'REVIEWER' && cr.status === 'SUBMITTED';
   const myApprover = cr.approvers.find((a) => a.userId === user.id);
   const canApprove =
-    (role === 'APPROVER' && cr.status === 'REVIEW_APPROVED' && !!myApprover && myApprover.decision === null) ||
+    (role === 'APPROVER' && cr.status === 'REVIEW_APPROVED' && !!myApprover && myApprover.decision === null && !cr.iAlreadyActed) ||
     cr.canActAsDelegate;
   const myDecisionMade = role === 'APPROVER' && !!myApprover && myApprover.decision !== null;
   const isReviewDelegate = canReview && cr.canActAsDelegate && cr.reviewerId !== user.id;

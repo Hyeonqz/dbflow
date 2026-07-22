@@ -179,6 +179,8 @@ export type ChangeRequestDetail = Omit<ChangeRequestSummary, 'approverNames' | '
   approvers: ChangeRequestApprover[];
   /** 현재 로그인 사용자가 부재 위임을 통해 이 CR의 검토/결재를 대신 수행할 수 있는지 여부. */
   canActAsDelegate: boolean;
+  /** 현재 로그인 사용자가 이 CR에 대해 이미 결정을 내렸는지(직접 또는 대리) 여부. */
+  iAlreadyActed: boolean;
 };
 
 export type CreateChangeRequestInput = {

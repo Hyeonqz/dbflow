@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+.git
+.run
+.omc
+.worktrees
+docs
+*.md
+# 시크릿 — 이미지 레이어에 절대 포함 금지
+.env
+**/.env

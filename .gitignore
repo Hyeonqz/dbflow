@@ -14,7 +14,6 @@ dist/
 .superpowers/
 CLAUDE.md
 AGENTS.md
-docs/
 
 # git worktrees (local, per-branch checkouts)
 .worktrees/

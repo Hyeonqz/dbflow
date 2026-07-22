@@ -11,6 +11,7 @@ import { SqlReviewModule } from './sql-review/sql-review.module';
 import { ApprovalPolicyModule } from './approval-policy/approval-policy.module';
 import { ApplyScheduleModule } from './apply-schedule/apply-schedule.module';
 import { DelegationModule } from './delegation/delegation.module';
+import { BootstrapModule } from './bootstrap/bootstrap.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { DelegationModule } from './delegation/delegation.module';
     ApprovalPolicyModule,
     ApplyScheduleModule,
     DelegationModule,
+    BootstrapModule,
   ],
   controllers: [HealthController],
 })

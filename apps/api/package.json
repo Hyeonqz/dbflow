@@ -25,9 +25,6 @@
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0"
   },
-  "prisma": {
-    "seed": "ts-node prisma/seed.ts"
-  },
   "devDependencies": {
     "@nestjs/cli": "^10.3.0",
     "@nestjs/testing": "^10.3.0",

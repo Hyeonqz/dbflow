@@ -1,0 +1,15 @@
+{
+  "common": { "save": "Save", "cancel": "Cancel", "delete": "Delete", "create": "Create", "loading": "Loading…", "logout": "Log out" },
+  "nav": {
+    "dashboard": "Dashboard",
+    "changeRequests": "Change Requests",
+    "schemaDiff": "Schema Diff",
+    "targetDatabases": "Target Databases",
+    "delegations": "Delegations",
+    "users": "Users",
+    "audit": "Audit Log",
+    "sqlReview": "SQL Review Policy",
+    "approvalPolicy": "Approval Policy",
+    "applySchedule": "Apply Window / Freeze"
+  }
+}

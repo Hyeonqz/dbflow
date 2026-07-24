@@ -1,0 +1,15 @@
+{
+  "common": { "save": "저장", "cancel": "취소", "delete": "삭제", "create": "생성", "loading": "불러오는 중…", "logout": "로그아웃" },
+  "nav": {
+    "dashboard": "대시보드",
+    "changeRequests": "변경요청",
+    "schemaDiff": "스키마 Diff",
+    "targetDatabases": "대상 DB",
+    "delegations": "부재 위임",
+    "users": "사용자 관리",
+    "audit": "감사 로그",
+    "sqlReview": "SQL 리뷰 정책",
+    "approvalPolicy": "결재 정책",
+    "applySchedule": "작업창·동결"
+  }
+}

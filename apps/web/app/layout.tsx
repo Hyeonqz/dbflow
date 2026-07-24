@@ -1,7 +1,9 @@
 import './globals.css';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/components/theme';
 
-export const metadata = { title: 'DBFlow', description: 'DB 변경 형상 관리' };
+export const metadata = { title: 'DBFlow', description: 'Controlled database change management' };
 
 // FOUC 방지: 첫 페인트 전에 .dark 클래스를 선반영.
 const themeScript = `
@@ -13,14 +15,18 @@ try {
 } catch (e) {}
 `;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
+  const messages = await getMessages();
   return (
-    <html lang="ko">
+    <html lang={locale}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-screen">
-        <ThemeProvider>{children}</ThemeProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ThemeProvider>{children}</ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

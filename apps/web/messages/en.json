@@ -208,5 +208,40 @@
     "validationRequired": "Name, host, username, and database are required.",
     "validationPort": "Port must be an integer between 1 and 65535.",
     "validationPassword": "Please enter a password."
+  },
+  "applySchedule": {
+    "accessDenied": "Access denied",
+    "pageTitle": "Apply Window / Freeze",
+    "pageDescription": "Manage the weekdays/hours change requests may be applied per environment, and freeze periods.",
+    "timezoneMismatch": "Server timezone mismatch ({timezone}) — window evaluation may be inaccurate.",
+    "day": {
+      "sun": "Sun",
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat"
+    },
+    "windowsHeading": "Maintenance windows",
+    "windowsEmpty": "No maintenance windows registered.",
+    "envLabel": "Environment",
+    "dayLabel": "Weekday",
+    "startEndLabel": "Start–End",
+    "startLabel": "Start",
+    "endLabel": "End",
+    "endMidnightHint": "End 00:00 = 24:00 (midnight)",
+    "addingWindow": "Adding…",
+    "addWindowButton": "Add window",
+    "freezesHeading": "Freeze periods",
+    "freezesEmpty": "No freeze periods registered.",
+    "periodKstLabel": "Period (KST)",
+    "reasonLabel": "Reason",
+    "createdByLabel": "Registered by",
+    "release": "Release",
+    "reasonPlaceholder": "e.g. Year-end closing work",
+    "addingFreeze": "Registering…",
+    "addFreezeButton": "Register freeze",
+    "freezeValidation": "Start/end datetime and reason are required."
   }
 }

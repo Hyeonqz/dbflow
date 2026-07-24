@@ -208,5 +208,40 @@
     "validationRequired": "이름·호스트·사용자·데이터베이스는 필수입니다.",
     "validationPort": "포트는 1~65535 사이의 정수여야 합니다.",
     "validationPassword": "비밀번호를 입력해 주세요."
+  },
+  "applySchedule": {
+    "accessDenied": "접근 불가",
+    "pageTitle": "작업창·동결",
+    "pageDescription": "환경별로 변경요청을 적용할 수 있는 요일·시간대와 동결 기간을 관리합니다.",
+    "timezoneMismatch": "서버 타임존 불일치({timezone}) — 창 판정이 어긋날 수 있습니다.",
+    "day": {
+      "sun": "일",
+      "mon": "월",
+      "tue": "화",
+      "wed": "수",
+      "thu": "목",
+      "fri": "금",
+      "sat": "토"
+    },
+    "windowsHeading": "작업창",
+    "windowsEmpty": "등록된 작업창이 없습니다.",
+    "envLabel": "환경",
+    "dayLabel": "요일",
+    "startEndLabel": "시작~종료",
+    "startLabel": "시작",
+    "endLabel": "종료",
+    "endMidnightHint": "종료 00:00 = 24:00(자정)",
+    "addingWindow": "추가 중…",
+    "addWindowButton": "작업창 추가",
+    "freezesHeading": "동결 기간",
+    "freezesEmpty": "등록된 동결 기간이 없습니다.",
+    "periodKstLabel": "기간(KST)",
+    "reasonLabel": "사유",
+    "createdByLabel": "등록자",
+    "release": "해제",
+    "reasonPlaceholder": "예: 연말 정산 작업",
+    "addingFreeze": "등록 중…",
+    "addFreezeButton": "동결 등록",
+    "freezeValidation": "시작·종료 일시와 사유는 필수입니다."
   }
 }

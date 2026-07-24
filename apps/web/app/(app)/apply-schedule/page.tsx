@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
+import { useLocale } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import {
   createApplyWindow,
@@ -12,6 +13,8 @@ import {
   type TargetEnv,
 } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
+import { formatDateTime } from '@/lib/format';
+import type { Locale } from '@/i18n/config';
 
 const ENV_OPTIONS: TargetEnv[] = ['DEV', 'STAGING', 'PROD'];
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -21,20 +24,6 @@ const inputClass =
 
 /** 분(0~1440) → "HH:mm" 표시. 1440(자정)은 "24:00"으로 표시. */
 const fmtMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-
-/** ISO 문자열을 KST(Asia/Seoul) 고정 표시로 포맷(서버 타임존과 무관하게 일관 표시). */
-function fmtKst(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
-}
 
 export default function ApplySchedulePage() {
   const { user, ready } = useUser();
@@ -232,6 +221,7 @@ function FreezesSection({
   onChanged: () => Promise<unknown>;
 }) {
   const fid = useId();
+  const locale = useLocale() as Locale;
   const [env, setEnv] = useState<TargetEnv>('DEV');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
@@ -295,7 +285,7 @@ function FreezesSection({
               {schedule.freezes.map((f) => (
                 <tr key={f.id} className="bg-card">
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-ink">{f.env}</td>
-                  <td className="px-4 py-3 tabular-nums text-ink">{fmtKst(f.startsAt)} ~ {fmtKst(f.endsAt)}</td>
+                  <td className="px-4 py-3 tabular-nums text-ink">{formatDateTime(f.startsAt, locale)} ~ {formatDateTime(f.endsAt, locale)}</td>
                   <td className="px-4 py-3 text-muted">{f.reason}</td>
                   <td className="px-4 py-3 text-muted">{f.createdBy?.name ?? '-'}</td>
                   <td className="px-4 py-3 text-right">

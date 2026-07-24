@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
+import { useLocale } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import type { User } from '@/lib/auth';
+import type { Locale } from '@/i18n/config';
 import {
   createDelegation,
   deleteDelegation,
@@ -12,27 +14,15 @@ import {
   type UserSummary,
 } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
+import { formatDateTime } from '@/lib/format';
 
 const ACCESS_ROLES = ['REVIEWER', 'APPROVER', 'ADMIN'];
 
 const inputClass =
   'w-full rounded-2xl bg-card px-3 py-2 text-sm outline-none ring-1 ring-border-strong focus:ring-primary';
 
-/** ISO 문자열을 KST(Asia/Seoul) 고정 표시로 포맷(서버 타임존과 무관하게 일관 표시). */
-function fmtKst(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
-}
-
 export default function DelegationsPage() {
+  const locale = useLocale() as Locale;
   const { user, ready } = useUser();
   const [rows, setRows] = useState<DelegationRow[] | null>(null);
   const [error, setError] = useState('');
@@ -103,7 +93,7 @@ export default function DelegationsPage() {
                 <tr key={r.id} className="bg-card">
                   <td className="px-4 py-3 text-ink">{r.delegator.name ?? '-'}</td>
                   <td className="px-4 py-3 text-ink">{r.delegate.name ?? '-'}</td>
-                  <td className="px-4 py-3 tabular-nums text-ink">{fmtKst(r.startsAt)} ~ {fmtKst(r.endsAt)}</td>
+                  <td className="px-4 py-3 tabular-nums text-ink">{formatDateTime(r.startsAt, locale)} ~ {formatDateTime(r.endsAt, locale)}</td>
                   <td className="px-4 py-3 text-muted">{r.reason ?? '-'}</td>
                   <td className="px-4 py-3 text-muted">{r.createdBy?.name ?? '-'}</td>
                   <td className="px-4 py-3 text-right">

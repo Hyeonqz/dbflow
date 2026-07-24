@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocale } from 'next-intl';
 import { useCurrentUser, type User } from '@/lib/auth';
 import {
   applyChangeRequest,
@@ -39,12 +40,14 @@ import {
 } from '@/components/badges';
 import { formatDateTime } from '@/lib/format';
 import { PageHeader } from '@/components/page-header';
+import type { Locale } from '@/i18n/config';
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const fmtMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 export default function ChangeRequestDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const locale = useLocale() as Locale;
   const { user, ready } = useCurrentUser();
   const [cr, setCr] = useState<ChangeRequestDetail | null>(null);
   const [executions, setExecutions] = useState<Execution[] | null>(null);
@@ -97,7 +100,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
             <EnvBadge env={cr.targetEnv} />
             <span>{cr.authorName ?? cr.authorId}</span>
             <span aria-hidden>·</span>
-            <span>{formatDateTime(cr.createdAt)}</span>
+            <span>{formatDateTime(cr.createdAt, locale)}</span>
             <span aria-hidden>·</span>
             <span>검토자 {cr.reviewerName ?? '미지정'}</span>
             <span aria-hidden>·</span>
@@ -186,7 +189,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusBadge status={h.toStatus} />
                         <span className="text-sm text-ink">{h.actorName ?? h.actorId}</span>
-                        <span className="text-xs text-muted">{formatDateTime(h.createdAt)}</span>
+                        <span className="text-xs text-muted">{formatDateTime(h.createdAt, locale)}</span>
                       </div>
                       {h.comment && <p className="mt-1 text-sm text-muted">{h.comment}</p>}
                     </li>
@@ -583,6 +586,7 @@ function ApplyPanel({
   onError: (msg: string) => void;
   onApplied: () => Promise<unknown>;
 }) {
+  const locale = useLocale() as Locale;
   const [dbs, setDbs] = useState<TargetDatabase[] | null>(null);
   const [dbNotice, setDbNotice] = useState('');
   const [selectedId, setSelectedId] = useState('');
@@ -744,7 +748,7 @@ function ApplyPanel({
         <>
           {schedule && !schedule.allowed && schedule.reason === 'FROZEN' && (
             <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-500">
-              🧊 동결 중: {schedule.freeze?.reason} ({new Date(schedule.freeze!.endsAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}까지)
+              🧊 동결 중: {schedule.freeze?.reason} ({formatDateTime(schedule.freeze!.endsAt, locale)}까지)
             </div>
           )}
           {schedule && !schedule.allowed && schedule.reason === 'OUT_OF_WINDOW' && (
@@ -934,6 +938,7 @@ function ExecutionCard({
   onError: (msg: string) => void;
   onRolledBack: () => Promise<unknown>;
 }) {
+  const locale = useLocale() as Locale;
   const [rollingBack, setRollingBack] = useState(false);
   const isApply = (exec.kind ?? 'APPLY') === 'APPLY';
   const restorable = isBackupRestorable(backup);
@@ -965,7 +970,7 @@ function ExecutionCard({
             </span>
           )}
           <ExecutionStatusBadge status={exec.status} />
-          <span className="text-xs text-muted">{formatDateTime(exec.createdAt)}</span>
+          <span className="text-xs text-muted">{formatDateTime(exec.createdAt, locale)}</span>
         </div>
         <span className="text-xs tabular-nums text-muted">
           {exec.startedAt && exec.finishedAt

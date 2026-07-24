@@ -5,6 +5,10 @@ name: dbflow
 services:
   mysql:
     image: mysql:8.0
+    # binlog가 기본 켜진 MySQL 8.0에서 앱 유저(dbflow, DB 범위 권한)가 audit_log의
+    # append-only 트리거를 생성할 수 있게 함(없으면 마이그레이션이 ERROR 1419로 실패).
+    # 앱 유저에 전역 SUPER를 주는 것보다 최소권한을 유지하는 방식.
+    command: ["--log-bin-trust-function-creators=1"]
     environment:
       MYSQL_DATABASE: dbflow
       MYSQL_USER: dbflow

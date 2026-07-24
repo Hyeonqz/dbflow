@@ -1,5 +1,10 @@
 # ── build: workspace 설치 → prisma generate → nest build ─────────
 FROM node:22-bookworm-slim AS build
+# openssl: prisma generate가 빌드 시 OpenSSL 3.0을 감지해 런타임과 일치하는
+# 엔진(linux-*-openssl-3.0.x)을 생성하도록. 없으면 1.1.x로 폴백해 런타임에서 불일치.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./

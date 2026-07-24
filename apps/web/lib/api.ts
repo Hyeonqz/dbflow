@@ -1,4 +1,5 @@
 import type { Role } from '@/lib/auth';
+import { ct } from '@/lib/i18n-client';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api';
 
@@ -45,11 +46,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
     window.location.href = '/login';
-    throw new ApiError(401, '세션이 만료되었습니다. 다시 로그인해 주세요.');
+    throw new ApiError(401, ct('sessionExpired'));
   }
 
   if (!res.ok) {
-    let message = `요청에 실패했습니다. (${res.status})`;
+    let message = `${ct('requestFailed')} (${res.status})`;
     try {
       const data = await res.json();
       if (data?.message) {
@@ -74,7 +75,7 @@ export async function login(email: string, password: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  if (!res.ok) throw new Error('로그인에 실패했습니다.');
+  if (!res.ok) throw new Error(ct('loginFailed'));
   return res.json() as Promise<{
     accessToken: string;
     user: { id: string; email: string; name: string; role: string; department: string };
@@ -603,7 +604,7 @@ export async function downloadAuditExport(q: AuditQuery, format: 'csv' | 'json')
   const res = await fetch(`${API_BASE}/audit-logs/export?${params.toString()}`, {
     headers: authHeaders(),
   });
-  if (!res.ok) throw new ApiError(res.status, `내보내기에 실패했습니다. (${res.status})`);
+  if (!res.ok) throw new ApiError(res.status, `${ct('exportFailed')} (${res.status})`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -1,7 +1,7 @@
 {
   "name": "dbflow",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "AGPL-3.0-only",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "api:dev": "pnpm --filter @dbflow/api start:dev",

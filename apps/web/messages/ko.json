@@ -324,5 +324,43 @@
     "registerButton": "위임 등록",
     "requiredFields": "대리인과 시작·종료 일시는 필수입니다.",
     "selectDelegatorRequired": "위임자를 선택하세요."
+  },
+  "dashboard": {
+    "greeting": "{name}님, 안녕하세요",
+    "summaryNone": "지금 처리할 일이 없어요. 깔끔하네요.",
+    "summaryFallback": "요청 {count}건을 관리하고 있어요.",
+    "summary": {
+      "developer": "진행 중 {count}건이 기다리고 있어요.",
+      "reviewer": "검토 대기 {count}건이 기다리고 있어요.",
+      "approver": "결재 대기 {count}건이 기다리고 있어요."
+    },
+    "action": {
+      "developer": "변경 요청 만들기",
+      "reviewer": "검토 대기 보기",
+      "approver": "결재 대기 보기"
+    },
+    "card": {
+      "developer": {
+        "drafts": "내 작성 중",
+        "inProgress": "내 진행 중",
+        "rejected": "내 반려",
+        "done": "내 완료"
+      },
+      "reviewer": {
+        "pending": "검토 대기",
+        "approvePending": "결재 대기",
+        "rejected": "반려",
+        "done": "완료"
+      },
+      "approver": {
+        "reviewInProgress": "검토 진행",
+        "pending": "결재 대기",
+        "rejected": "반려",
+        "done": "완료"
+      }
+    },
+    "recentTitle": "최근 변경 요청",
+    "viewAll": "전체 보기 →",
+    "emptyRecent": "아직 변경 요청이 없습니다."
   }
 }

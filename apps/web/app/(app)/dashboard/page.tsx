@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ROLE_LABEL } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import { listChangeRequests, type ChangeRequestSummary } from '@/lib/api';
 import { EnvBadge, StatusBadge } from '@/components/badges';
@@ -11,17 +11,19 @@ import { formatDateTime } from '@/lib/format';
 import { PageHeader } from '@/components/page-header';
 import { StatCard } from '@/components/stat-card';
 
-const ROLE_ACTION: Record<'DEVELOPER' | 'REVIEWER' | 'APPROVER', { label: string; href: string }> = {
-  DEVELOPER: { label: '변경 요청 만들기', href: '/change-requests/new' },
-  REVIEWER: { label: '검토 대기 보기', href: '/change-requests' },
-  APPROVER: { label: '결재 대기 보기', href: '/change-requests' },
+type StaffRole = 'DEVELOPER' | 'REVIEWER' | 'APPROVER';
+
+const ROLE_ACTION: Record<StaffRole, { labelKey: string; href: string }> = {
+  DEVELOPER: { labelKey: 'action.developer', href: '/change-requests/new' },
+  REVIEWER: { labelKey: 'action.reviewer', href: '/change-requests' },
+  APPROVER: { labelKey: 'action.approver', href: '/change-requests' },
 };
 
 // 목록 페이지 FILTERS 키와 동일. href 미지정 카드는 status 조합이 단일 필터로 매핑되지 않음.
 type FilterKey = 'REVIEW_PENDING' | 'APPROVE_PENDING' | 'REJECTED' | 'DONE';
 
 type CardDef = {
-  label: string;
+  labelKey: string;
   match: (cr: ChangeRequestSummary) => boolean;
   filter?: FilterKey;
   emphasis?: boolean;
@@ -29,37 +31,70 @@ type CardDef = {
 
 // §12.1 역할별 KPI 카드 매트릭스 — 지정 기반 가시성(T5): 세 역할 모두 자기 응답 집계.
 // ADMIN은 컴포넌트 상단 가드에서 리다이렉트되어 이 맵에 절대 접근하지 않는다.
-const CARDS_BY_ROLE: Record<'DEVELOPER' | 'REVIEWER' | 'APPROVER', CardDef[]> = {
+const CARDS_BY_ROLE: Record<StaffRole, CardDef[]> = {
   DEVELOPER: [
-    { label: '내 작성 중', match: (cr) => cr.status === 'DRAFT' },
-    { label: '내 진행 중', match: (cr) => cr.status === 'SUBMITTED' || cr.status === 'REVIEW_APPROVED', emphasis: true },
-    { label: '내 반려', match: (cr) => cr.status === 'REVIEW_REJECTED' || cr.status === 'FINAL_REJECTED', filter: 'REJECTED' },
-    { label: '내 완료', match: (cr) => cr.status === 'FINAL_APPROVED' || cr.status === 'APPLIED', filter: 'DONE' },
+    { labelKey: 'card.developer.drafts', match: (cr) => cr.status === 'DRAFT' },
+    {
+      labelKey: 'card.developer.inProgress',
+      match: (cr) => cr.status === 'SUBMITTED' || cr.status === 'REVIEW_APPROVED',
+      emphasis: true,
+    },
+    {
+      labelKey: 'card.developer.rejected',
+      match: (cr) => cr.status === 'REVIEW_REJECTED' || cr.status === 'FINAL_REJECTED',
+      filter: 'REJECTED',
+    },
+    {
+      labelKey: 'card.developer.done',
+      match: (cr) => cr.status === 'FINAL_APPROVED' || cr.status === 'APPLIED',
+      filter: 'DONE',
+    },
   ],
   REVIEWER: [
-    { label: '검토 대기', match: (cr) => cr.status === 'SUBMITTED', filter: 'REVIEW_PENDING', emphasis: true },
-    { label: '결재 대기', match: (cr) => cr.status === 'REVIEW_APPROVED', filter: 'APPROVE_PENDING' },
-    { label: '반려', match: (cr) => cr.status === 'REVIEW_REJECTED' || cr.status === 'FINAL_REJECTED', filter: 'REJECTED' },
-    { label: '완료', match: (cr) => cr.status === 'FINAL_APPROVED' || cr.status === 'APPLIED', filter: 'DONE' },
+    { labelKey: 'card.reviewer.pending', match: (cr) => cr.status === 'SUBMITTED', filter: 'REVIEW_PENDING', emphasis: true },
+    { labelKey: 'card.reviewer.approvePending', match: (cr) => cr.status === 'REVIEW_APPROVED', filter: 'APPROVE_PENDING' },
+    {
+      labelKey: 'card.reviewer.rejected',
+      match: (cr) => cr.status === 'REVIEW_REJECTED' || cr.status === 'FINAL_REJECTED',
+      filter: 'REJECTED',
+    },
+    { labelKey: 'card.reviewer.done', match: (cr) => cr.status === 'FINAL_APPROVED' || cr.status === 'APPLIED', filter: 'DONE' },
   ],
   APPROVER: [
-    { label: '검토 진행', match: (cr) => cr.status === 'SUBMITTED', filter: 'REVIEW_PENDING' },
-    { label: '결재 대기', match: (cr) => cr.myApprovalPending, filter: 'APPROVE_PENDING', emphasis: true },
-    { label: '반려', match: (cr) => cr.status === 'REVIEW_REJECTED' || cr.status === 'FINAL_REJECTED', filter: 'REJECTED' },
-    { label: '완료', match: (cr) => cr.status === 'FINAL_APPROVED' || cr.status === 'APPLIED', filter: 'DONE' },
+    { labelKey: 'card.approver.reviewInProgress', match: (cr) => cr.status === 'SUBMITTED', filter: 'REVIEW_PENDING' },
+    { labelKey: 'card.approver.pending', match: (cr) => cr.myApprovalPending, filter: 'APPROVE_PENDING', emphasis: true },
+    {
+      labelKey: 'card.approver.rejected',
+      match: (cr) => cr.status === 'REVIEW_REJECTED' || cr.status === 'FINAL_REJECTED',
+      filter: 'REJECTED',
+    },
+    { labelKey: 'card.approver.done', match: (cr) => cr.status === 'FINAL_APPROVED' || cr.status === 'APPLIED', filter: 'DONE' },
   ],
 };
 
+const SUMMARY_KEY: Record<StaffRole, string> = {
+  DEVELOPER: 'summary.developer',
+  REVIEWER: 'summary.reviewer',
+  APPROVER: 'summary.approver',
+};
+
 /** 인사 밑 한 문장 요약(토스식). emphasis 카드의 건수로 "지금 할 일"을 자연어로. */
-function buildSummary(items: ChangeRequestSummary[], cards: CardDef[]): string {
+function buildSummary(
+  t: ReturnType<typeof useTranslations<'dashboard'>>,
+  role: StaffRole,
+  items: ChangeRequestSummary[],
+  cards: CardDef[],
+): string {
   const focus = cards.find((c) => c.emphasis);
-  if (!focus) return `요청 ${items.length}건을 관리하고 있어요.`;
+  if (!focus) return t('summaryFallback', { count: items.length });
   const n = items.filter((it) => focus.match(it)).length;
-  if (n === 0) return '지금 처리할 일이 없어요. 깔끔하네요.';
-  return `${focus.label.replace('내 ', '')} ${n}건이 기다리고 있어요.`;
+  if (n === 0) return t('summaryNone');
+  return t(SUMMARY_KEY[role], { count: n });
 }
 
 export default function Dashboard() {
+  const t = useTranslations('dashboard');
+  const tEnum = useTranslations('enum');
   const { user, ready } = useUser();
   const router = useRouter();
   const [items, setItems] = useState<ChangeRequestSummary[] | null>(null);
@@ -90,17 +125,22 @@ export default function Dashboard() {
 
   const action = ROLE_ACTION[user.role];
   const cards = CARDS_BY_ROLE[user.role];
-  const summary = items ? buildSummary(items, cards) : ROLE_LABEL[user.role];
+  const roleKey = `role.${user.role}`;
+  const summary = items
+    ? buildSummary(t, user.role, items, cards)
+    : tEnum.has(roleKey)
+      ? tEnum(roleKey)
+      : user.role;
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title={`${user.name}님, 안녕하세요`}
+        title={t('greeting', { name: user.name })}
         description={summary}
         action={
           action && (
             <Link href={action.href} className="btn-primary inline-flex px-5 py-2.5 text-sm">
-              {action.label}
+              {t(action.labelKey)}
             </Link>
           )
         }
@@ -123,8 +163,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {cards.map((c) => (
                 <StatCard
-                  key={c.label}
-                  label={c.label}
+                  key={c.labelKey}
+                  label={t(c.labelKey)}
                   value={items.filter((it) => c.match(it)).length}
                   href={c.filter ? `/change-requests?filter=${c.filter}` : undefined}
                   emphasis={c.emphasis}
@@ -134,19 +174,17 @@ export default function Dashboard() {
 
             <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-ink">최근 변경 요청</h2>
+                <h2 className="text-base font-semibold text-ink">{t('recentTitle')}</h2>
                 <Link
                   href="/change-requests"
                   className="focusable rounded-lg text-sm font-medium text-muted transition-colors hover:text-ink"
                 >
-                  전체 보기 →
+                  {t('viewAll')}
                 </Link>
               </div>
 
               {recent.length === 0 ? (
-                <div className="mt-4 rounded-2xl bg-subtle px-6 py-12 text-center text-muted">
-                  아직 변경 요청이 없습니다.
-                </div>
+                <div className="mt-4 rounded-2xl bg-subtle px-6 py-12 text-center text-muted">{t('emptyRecent')}</div>
               ) : (
                 <ul className="mt-2 divide-y divide-border">
                   {recent.map((it) => (

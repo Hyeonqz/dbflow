@@ -324,5 +324,43 @@
     "registerButton": "Register delegation",
     "requiredFields": "Delegate and start/end date-time are required.",
     "selectDelegatorRequired": "Select a delegator."
+  },
+  "dashboard": {
+    "greeting": "Hi, {name}",
+    "summaryNone": "Nothing to do right now. Nice and tidy.",
+    "summaryFallback": "You have {count} requests.",
+    "summary": {
+      "developer": "{count} in progress, waiting on you.",
+      "reviewer": "{count} pending your review.",
+      "approver": "{count} pending your approval."
+    },
+    "action": {
+      "developer": "Create change request",
+      "reviewer": "View pending review",
+      "approver": "View pending approval"
+    },
+    "card": {
+      "developer": {
+        "drafts": "My drafts",
+        "inProgress": "In progress",
+        "rejected": "Rejected",
+        "done": "Completed"
+      },
+      "reviewer": {
+        "pending": "Pending my review",
+        "approvePending": "Pending approval",
+        "rejected": "Rejected",
+        "done": "Completed"
+      },
+      "approver": {
+        "reviewInProgress": "Review in progress",
+        "pending": "Pending my approval",
+        "rejected": "Rejected",
+        "done": "Completed"
+      }
+    },
+    "recentTitle": "Recent change requests",
+    "viewAll": "View all →",
+    "emptyRecent": "No change requests yet."
   }
 }

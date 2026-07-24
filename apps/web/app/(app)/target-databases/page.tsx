@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useCurrentUser } from '@/lib/auth';
 import {
   createTargetDatabase,
@@ -26,6 +27,8 @@ const inputClass =
   'w-full rounded-2xl bg-card px-4 py-3 outline-none ring-1 ring-border-strong focus:ring-primary';
 
 export default function TargetDatabasesPage() {
+  const t = useTranslations('targetDatabases');
+  const tCommon = useTranslations('common');
   const { user, ready } = useCurrentUser();
   const [items, setItems] = useState<TargetDatabase[] | null>(null);
   const [error, setError] = useState('');
@@ -43,13 +46,13 @@ export default function TargetDatabasesPage() {
   }, [ready, load]);
 
   if (!ready || !user) {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{tCommon('loading')}</p>;
   }
 
   if (user.role !== 'APPROVER') {
     return (
       <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">
-        대상 DB 관리는 결재자만 가능합니다.
+        {t('approverOnly')}
       </p>
     );
   }
@@ -57,12 +60,12 @@ export default function TargetDatabasesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="대상 데이터베이스"
-        description="변경 요청을 적용할 DB를 등록·관리합니다."
+        title={t('pageTitle')}
+        description={t('pageDescription')}
         action={
           !creating && (
             <button onClick={() => setCreating(true)} className="btn-primary px-4 py-2.5 text-sm">
-              새 대상 DB
+              {t('newButton')}
             </button>
           )
         }
@@ -74,10 +77,10 @@ export default function TargetDatabasesPage() {
 
       {creating && (
         <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
-          <h2 className="text-base font-semibold text-ink">새 대상 DB 등록</h2>
+          <h2 className="text-base font-semibold text-ink">{t('createHeading')}</h2>
           <TargetDatabaseForm
             mode="create"
-            submitLabel="등록"
+            submitLabel={t('register')}
             onCancel={() => setCreating(false)}
             onError={setError}
             onSubmit={async (values) => {
@@ -90,11 +93,11 @@ export default function TargetDatabasesPage() {
       )}
 
       <section>
-        {!error && items === null && <p className="text-muted">불러오는 중…</p>}
+        {!error && items === null && <p className="text-muted">{tCommon('loading')}</p>}
 
         {!error && items !== null && items.length === 0 && !creating && (
           <div className="rounded-2xl bg-card px-6 py-12 text-center ring-1 ring-border">
-            <p className="text-muted">등록된 대상 DB가 없습니다.</p>
+            <p className="text-muted">{t('emptyList')}</p>
           </div>
         )}
 
@@ -122,6 +125,8 @@ function TargetDatabaseCard({
   onError: (msg: string) => void;
   onChanged: () => Promise<unknown>;
 }) {
+  const t = useTranslations('targetDatabases');
+  const tCommon = useTranslations('common');
   const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
@@ -141,7 +146,7 @@ function TargetDatabaseCard({
   }
 
   async function remove() {
-    if (!window.confirm(`'${db.name}' 대상 DB를 삭제할까요?`)) return;
+    if (!window.confirm(t('deleteConfirm', { name: db.name }))) return;
     setDeleting(true);
     onError('');
     try {
@@ -156,11 +161,11 @@ function TargetDatabaseCard({
   if (editing) {
     return (
       <div className="rounded-2xl bg-card p-5 ring-1 ring-border">
-        <h2 className="text-base font-semibold text-ink">대상 DB 수정</h2>
+        <h2 className="text-base font-semibold text-ink">{t('editHeading')}</h2>
         <TargetDatabaseForm
           mode="edit"
           initial={db}
-          submitLabel="저장"
+          submitLabel={tCommon('save')}
           onCancel={() => setEditing(false)}
           onError={onError}
           onSubmit={async (values) => {
@@ -185,26 +190,26 @@ function TargetDatabaseCard({
           <p className="mt-2 font-mono text-sm text-muted">
             {db.username}@{db.host}:{db.port}/{db.database}
           </p>
-          <p className="mt-1 text-xs text-muted">수정 {formatDateTime(db.updatedAt)}</p>
+          <p className="mt-1 text-xs text-muted">{t('updatedAtLabel', { date: formatDateTime(db.updatedAt) })}</p>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button onClick={runTest} disabled={testing} className="btn-primary px-4 py-2 text-sm">
-          {testing ? '테스트 중…' : '연결 테스트'}
+          {testing ? t('testing') : t('testConnection')}
         </button>
         <button
           onClick={() => setEditing(true)}
           className="focusable rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle"
         >
-          수정
+          {t('edit')}
         </button>
         <button
           onClick={remove}
           disabled={deleting}
           className="focusable rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:ring-red-500/30 dark:hover:bg-red-500/15"
         >
-          {deleting ? '삭제 중…' : '삭제'}
+          {deleting ? t('deleting') : tCommon('delete')}
         </button>
       </div>
 
@@ -217,8 +222,8 @@ function TargetDatabaseCard({
           }`}
         >
           {testResult.success
-            ? `연결 성공 · ${db.dbType} ${testResult.serverVersion} · ${testResult.latencyMs}ms`
-            : `연결 실패 · ${testResult.error}`}
+            ? t('testSuccess', { dbType: db.dbType, version: testResult.serverVersion, latencyMs: testResult.latencyMs })
+            : t('testFailure', { error: testResult.error })}
         </p>
       )}
     </div>
@@ -254,6 +259,8 @@ function TargetDatabaseForm({
   onCancel: () => void;
   onError: (msg: string) => void;
 }) {
+  const t = useTranslations('targetDatabases');
+  const tCommon = useTranslations('common');
   const fid = useId(); // 폼 인스턴스별 고유 id 접두사(등록/수정 동시 렌더 시 id 충돌 방지)
   const [values, setValues] = useState<FormValues>({
     name: initial?.name ?? '',
@@ -282,15 +289,15 @@ function TargetDatabaseForm({
     const port = Number(values.port);
 
     if (!name || !host || !username || !database) {
-      onError('이름·호스트·사용자·데이터베이스는 필수입니다.');
+      onError(t('validationRequired'));
       return;
     }
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      onError('포트는 1~65535 사이의 정수여야 합니다.');
+      onError(t('validationPort'));
       return;
     }
     if (mode === 'create' && !values.password) {
-      onError('비밀번호를 입력해 주세요.');
+      onError(t('validationPassword'));
       return;
     }
 
@@ -330,11 +337,11 @@ function TargetDatabaseForm({
   return (
     <form onSubmit={submit} className="mt-4 space-y-4">
       <div className="space-y-2">
-        <label htmlFor={`${fid}-name`} className="block text-sm font-semibold">이름</label>
+        <label htmlFor={`${fid}-name`} className="block text-sm font-semibold">{t('nameLabel')}</label>
         <input
           id={`${fid}-name`}
           className={inputClass}
-          placeholder="예: 운영 MySQL"
+          placeholder={t('namePlaceholder')}
           value={values.name}
           onChange={(e) => set('name', e.target.value)}
         />
@@ -342,7 +349,7 @@ function TargetDatabaseForm({
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1 space-y-2">
-          <label htmlFor={`${fid}-env`} className="block text-sm font-semibold">환경</label>
+          <label htmlFor={`${fid}-env`} className="block text-sm font-semibold">{t('envLabel')}</label>
           <select
             id={`${fid}-env`}
             className={inputClass}
@@ -357,7 +364,7 @@ function TargetDatabaseForm({
           </select>
         </div>
         <div className="flex-1 space-y-2">
-          <label htmlFor={`${fid}-dbType`} className="block text-sm font-semibold">DB 종류</label>
+          <label htmlFor={`${fid}-dbType`} className="block text-sm font-semibold">{t('dbTypeLabel')}</label>
           <select
             id={`${fid}-dbType`}
             className={inputClass}
@@ -375,7 +382,7 @@ function TargetDatabaseForm({
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="space-y-2 sm:flex-1">
-          <label htmlFor={`${fid}-host`} className="block text-sm font-semibold">호스트</label>
+          <label htmlFor={`${fid}-host`} className="block text-sm font-semibold">{t('hostLabel')}</label>
           <input
             id={`${fid}-host`}
             className={inputClass}
@@ -385,7 +392,7 @@ function TargetDatabaseForm({
           />
         </div>
         <div className="space-y-2 sm:w-40">
-          <label htmlFor={`${fid}-port`} className="block text-sm font-semibold">포트</label>
+          <label htmlFor={`${fid}-port`} className="block text-sm font-semibold">{t('portLabel')}</label>
           <input
             id={`${fid}-port`}
             className={`${inputClass} tabular-nums`}
@@ -399,7 +406,7 @@ function TargetDatabaseForm({
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1 space-y-2">
-          <label htmlFor={`${fid}-username`} className="block text-sm font-semibold">사용자</label>
+          <label htmlFor={`${fid}-username`} className="block text-sm font-semibold">{t('usernameLabel')}</label>
           <input
             id={`${fid}-username`}
             className={inputClass}
@@ -409,7 +416,7 @@ function TargetDatabaseForm({
           />
         </div>
         <div className="flex-1 space-y-2">
-          <label htmlFor={`${fid}-database`} className="block text-sm font-semibold">데이터베이스</label>
+          <label htmlFor={`${fid}-database`} className="block text-sm font-semibold">{t('databaseLabel')}</label>
           <input
             id={`${fid}-database`}
             className={inputClass}
@@ -422,9 +429,9 @@ function TargetDatabaseForm({
 
       <div className="space-y-2">
         <label htmlFor={`${fid}-password`} className="block text-sm font-semibold">
-          비밀번호
+          {t('passwordLabel')}
           {mode === 'edit' && (
-            <span className="ml-1 font-normal text-muted">(변경 시에만 입력 · 비워두면 기존 유지)</span>
+            <span className="ml-1 font-normal text-muted">{t('passwordEditHint')}</span>
           )}
         </label>
         <input
@@ -432,7 +439,7 @@ function TargetDatabaseForm({
           className={inputClass}
           type="password"
           autoComplete="new-password"
-          placeholder={mode === 'edit' ? '••••••••' : '비밀번호'}
+          placeholder={mode === 'edit' ? '••••••••' : t('passwordLabel')}
           value={values.password}
           onChange={(e) => set('password', e.target.value)}
         />
@@ -440,7 +447,7 @@ function TargetDatabaseForm({
 
       <div className="flex gap-3">
         <button type="submit" disabled={busy} className="btn-primary flex-1 px-4 py-2.5 text-sm">
-          {busy ? '저장 중…' : submitLabel}
+          {busy ? t('saving') : submitLabel}
         </button>
         <button
           type="button"
@@ -448,7 +455,7 @@ function TargetDatabaseForm({
           disabled={busy}
           className="focusable rounded-2xl bg-card px-4 py-2.5 text-sm font-semibold text-muted ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
         >
-          취소
+          {tCommon('cancel')}
         </button>
       </div>
     </form>

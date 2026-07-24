@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import type { Locale } from '@/i18n/config';
 import { useCurrentUser } from '@/lib/auth';
 import {
   createTargetDatabase,
@@ -127,6 +128,7 @@ function TargetDatabaseCard({
 }) {
   const t = useTranslations('targetDatabases');
   const tCommon = useTranslations('common');
+  const locale = useLocale() as Locale;
   const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
@@ -190,7 +192,7 @@ function TargetDatabaseCard({
           <p className="mt-2 font-mono text-sm text-muted">
             {db.username}@{db.host}:{db.port}/{db.database}
           </p>
-          <p className="mt-1 text-xs text-muted">{t('updatedAtLabel', { date: formatDateTime(db.updatedAt) })}</p>
+          <p className="mt-1 text-xs text-muted">{t('updatedAtLabel', { date: formatDateTime(db.updatedAt, locale) })}</p>
         </div>
       </div>
 

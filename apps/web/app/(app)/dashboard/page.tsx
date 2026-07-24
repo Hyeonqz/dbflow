@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import type { Locale } from '@/i18n/config';
 import { useUser } from '@/components/user-context';
 import { listChangeRequests, type ChangeRequestSummary } from '@/lib/api';
 import { EnvBadge, StatusBadge } from '@/components/badges';
@@ -95,6 +96,7 @@ function buildSummary(
 export default function Dashboard() {
   const t = useTranslations('dashboard');
   const tEnum = useTranslations('enum');
+  const locale = useLocale() as Locale;
   const { user, ready } = useUser();
   const router = useRouter();
   const [items, setItems] = useState<ChangeRequestSummary[] | null>(null);
@@ -196,7 +198,7 @@ export default function Dashboard() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium text-ink">{it.title}</p>
                           <p className="mt-0.5 truncate text-sm text-muted">
-                            {it.authorName ?? it.authorId} · {formatDateTime(it.createdAt)}
+                            {it.authorName ?? it.authorId} · {formatDateTime(it.createdAt, locale)}
                           </p>
                         </div>
                         <EnvBadge env={it.targetEnv} />

@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import type { Locale } from '@/i18n/config';
 import { useUser } from '@/components/user-context';
 import { downloadAuditExport, listAuditLogs, type AuditLogRow, type AuditQuery } from '@/lib/api';
 import type { Role } from '@/lib/auth';
@@ -278,6 +279,7 @@ export default function AuditPage() {
 function AuditRow({ row, expanded, onToggle }: { row: AuditLogRow; expanded: boolean; onToggle: () => void }) {
   const t = useTranslations('audit');
   const tEnum = useTranslations('enum');
+  const locale = useLocale() as Locale;
   const roleLabel = row.actorRole
     ? tEnum.has(`role.${row.actorRole}`)
       ? tEnum(`role.${row.actorRole as Role}`)
@@ -299,7 +301,7 @@ function AuditRow({ row, expanded, onToggle }: { row: AuditLogRow; expanded: boo
         }}
         className="focusable cursor-pointer bg-card transition-colors hover:bg-subtle focus-visible:relative"
       >
-        <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(row.createdAt)}</td>
+        <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(row.createdAt, locale)}</td>
         <td className="px-4 py-3">
           <p className="font-semibold text-ink">{row.actorName ?? row.actorId ?? t('systemActor')}</p>
           {(row.actorDept || roleLabel) && (

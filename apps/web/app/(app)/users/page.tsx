@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import type { Locale } from '@/i18n/config';
 import { useUser } from '@/components/user-context';
 import { adminListUsers, createUser, type AdminUser, type AdminUserInput, type Paginated } from '@/lib/api';
 import { type Role } from '@/lib/auth';
@@ -16,6 +17,7 @@ const inputClass =
 export default function UsersPage() {
   const t = useTranslations('users');
   const tEnum = useTranslations('enum');
+  const locale = useLocale() as Locale;
   const { user, ready } = useUser();
   const [role, setRole] = useState<Role | ''>('');
   const [q, setQ] = useState('');
@@ -131,7 +133,7 @@ export default function UsersPage() {
                       <span className="rounded-full bg-subtle px-3 py-1 text-xs font-medium text-muted">
                         {tEnum.has(`role.${u.role}`) ? tEnum(`role.${u.role as Role}`) : u.role}
                       </span>
-                      <p className="mt-1 text-xs text-muted">{formatDateTime(u.createdAt)}</p>
+                      <p className="mt-1 text-xs text-muted">{formatDateTime(u.createdAt, locale)}</p>
                     </div>
                   </div>
                 </li>

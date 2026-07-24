@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import type { Locale } from '@/i18n/config';
 import { type Role } from '@/lib/auth';
 import { useUser } from '@/components/user-context';
 import { listChangeRequests, type ChangeRequestStatus, type ChangeRequestSummary } from '@/lib/api';
@@ -44,6 +45,7 @@ export default function ChangeRequestListPage() {
   const router = useRouter();
   const t = useTranslations('changeRequests');
   const tCommon = useTranslations('common');
+  const locale = useLocale() as Locale;
   const [items, setItems] = useState<ChangeRequestSummary[] | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<FilterKey>('ALL');
@@ -174,7 +176,7 @@ export default function ChangeRequestListPage() {
                       </td>
                       <td className="px-4 py-3 text-muted">{it.authorName ?? it.authorId}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-muted">
-                        {formatDateTime(it.createdAt)}
+                        {formatDateTime(it.createdAt, locale)}
                       </td>
                     </tr>
                   ))}
@@ -198,7 +200,7 @@ export default function ChangeRequestListPage() {
                       <EnvBadge env={it.targetEnv} />
                       <span>{it.authorName ?? it.authorId}</span>
                       <span aria-hidden>·</span>
-                      <span>{formatDateTime(it.createdAt)}</span>
+                      <span>{formatDateTime(it.createdAt, locale)}</span>
                     </div>
                   </Link>
                 </li>

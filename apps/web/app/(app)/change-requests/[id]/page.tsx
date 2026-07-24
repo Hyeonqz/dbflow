@@ -38,7 +38,7 @@ import {
   SqlTypeBadge,
   StatusBadge,
 } from '@/components/badges';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatKstDateTime } from '@/lib/format';
 import { PageHeader } from '@/components/page-header';
 import type { Locale } from '@/i18n/config';
 
@@ -748,7 +748,7 @@ function ApplyPanel({
         <>
           {schedule && !schedule.allowed && schedule.reason === 'FROZEN' && (
             <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-500">
-              🧊 동결 중: {schedule.freeze?.reason} ({formatDateTime(schedule.freeze!.endsAt, locale)}까지)
+              🧊 동결 중: {schedule.freeze?.reason} ({formatKstDateTime(schedule.freeze!.endsAt, locale)}까지)
             </div>
           )}
           {schedule && !schedule.allowed && schedule.reason === 'OUT_OF_WINDOW' && (

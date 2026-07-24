@@ -14,7 +14,7 @@ import {
   type UserSummary,
 } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
-import { formatDateTime } from '@/lib/format';
+import { formatKstDateTime } from '@/lib/format';
 
 const ACCESS_ROLES = ['REVIEWER', 'APPROVER', 'ADMIN'];
 
@@ -93,7 +93,7 @@ export default function DelegationsPage() {
                 <tr key={r.id} className="bg-card">
                   <td className="px-4 py-3 text-ink">{r.delegator.name ?? '-'}</td>
                   <td className="px-4 py-3 text-ink">{r.delegate.name ?? '-'}</td>
-                  <td className="px-4 py-3 tabular-nums text-ink">{formatDateTime(r.startsAt, locale)} ~ {formatDateTime(r.endsAt, locale)}</td>
+                  <td className="px-4 py-3 tabular-nums text-ink">{formatKstDateTime(r.startsAt, locale)} ~ {formatKstDateTime(r.endsAt, locale)}</td>
                   <td className="px-4 py-3 text-muted">{r.reason ?? '-'}</td>
                   <td className="px-4 py-3 text-muted">{r.createdBy?.name ?? '-'}</td>
                   <td className="px-4 py-3 text-right">

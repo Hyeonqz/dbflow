@@ -13,7 +13,7 @@ import {
   type TargetEnv,
 } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
-import { formatDateTime } from '@/lib/format';
+import { formatKstDateTime } from '@/lib/format';
 import type { Locale } from '@/i18n/config';
 
 const ENV_OPTIONS: TargetEnv[] = ['DEV', 'STAGING', 'PROD'];
@@ -285,7 +285,7 @@ function FreezesSection({
               {schedule.freezes.map((f) => (
                 <tr key={f.id} className="bg-card">
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-ink">{f.env}</td>
-                  <td className="px-4 py-3 tabular-nums text-ink">{formatDateTime(f.startsAt, locale)} ~ {formatDateTime(f.endsAt, locale)}</td>
+                  <td className="px-4 py-3 tabular-nums text-ink">{formatKstDateTime(f.startsAt, locale)} ~ {formatKstDateTime(f.endsAt, locale)}</td>
                   <td className="px-4 py-3 text-muted">{f.reason}</td>
                   <td className="px-4 py-3 text-muted">{f.createdBy?.name ?? '-'}</td>
                   <td className="px-4 py-3 text-right">

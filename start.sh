@@ -3,7 +3,7 @@
 # - MySQL(docker) 기동 → Prisma 마이그레이션/시드 → API/Web 백그라운드 실행
 # 사용법:
 #   ./start.sh            전체 기동 (이미 떠 있으면 건너뜀)
-#   ./start.sh --seed     기동 + 시드 유저 재생성
+#   ./start.sh --seed     (호환용 no-op — 개발 기동은 항상 데모 시드)
 #   ./start.sh --no-install   pnpm install 생략
 set -euo pipefail
 

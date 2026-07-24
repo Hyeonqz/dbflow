@@ -15,6 +15,9 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule);
+  // web 프록시/리버스 프록시가 설정한 X-Forwarded-For를 신뢰해 req.ip가 실제 클라이언트 IP를 읽도록
+  // (compose에서 api는 외부 미노출 — web 프록시 뒤에서만 접근되므로 신뢰 가능).
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),
   );

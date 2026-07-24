@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
  * 요청 시점에 env를 읽으므로 사전 빌드된 이미지에서도 런타임 설정 가능
  * (rewrites는 빌드 시 routes-manifest에 구워져 불가 — 스펙 §2).
  */
-const FORWARD_REQUEST_HEADERS = ['authorization', 'content-type', 'accept', 'accept-language'];
+const FORWARD_REQUEST_HEADERS = ['authorization', 'content-type', 'accept', 'accept-language', 'user-agent', 'x-forwarded-for', 'x-real-ip'];
 // undici가 자동 압축 해제하므로 인코딩/길이 헤더는 그대로 넘기면 불일치 발생
 const DROP_RESPONSE_HEADERS = ['content-encoding', 'content-length', 'transfer-encoding'];
 

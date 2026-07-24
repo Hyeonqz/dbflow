@@ -304,5 +304,25 @@
     "nextPage": "다음",
     "systemActor": "시스템",
     "noMetadata": "없음"
+  },
+  "delegations": {
+    "accessDenied": "접근 불가",
+    "pageTitle": "부재 위임",
+    "pageDescription": "휴가·부재 시 검토·결재 권한을 지정 기간 동안 다른 사용자에게 위임합니다.",
+    "emptyList": "등록된 위임이 없습니다.",
+    "delegator": "위임자",
+    "delegate": "대리인",
+    "period": "기간(KST)",
+    "reason": "사유",
+    "createdBy": "등록자",
+    "removeButton": "해제",
+    "selectPlaceholder": "선택",
+    "start": "시작",
+    "end": "종료",
+    "reasonPlaceholder": "예: 연차",
+    "registering": "등록 중…",
+    "registerButton": "위임 등록",
+    "requiredFields": "대리인과 시작·종료 일시는 필수입니다.",
+    "selectDelegatorRequired": "위임자를 선택하세요."
   }
 }

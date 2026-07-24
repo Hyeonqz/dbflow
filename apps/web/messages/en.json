@@ -304,5 +304,25 @@
     "nextPage": "Next",
     "systemActor": "System",
     "noMetadata": "None"
+  },
+  "delegations": {
+    "accessDenied": "Access denied",
+    "pageTitle": "Absence Delegation",
+    "pageDescription": "Delegate review and approval authority to another user for a set period during leave or absence.",
+    "emptyList": "No delegations registered.",
+    "delegator": "Delegator",
+    "delegate": "Delegate",
+    "period": "Period (KST)",
+    "reason": "Reason",
+    "createdBy": "Registered by",
+    "removeButton": "Remove",
+    "selectPlaceholder": "Select",
+    "start": "Start",
+    "end": "End",
+    "reasonPlaceholder": "e.g. Annual leave",
+    "registering": "Registering…",
+    "registerButton": "Register delegation",
+    "requiredFields": "Delegate and start/end date-time are required.",
+    "selectDelegatorRequired": "Select a delegator."
   }
 }

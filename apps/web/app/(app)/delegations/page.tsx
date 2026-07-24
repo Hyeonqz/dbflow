@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import type { User } from '@/lib/auth';
 import type { Locale } from '@/i18n/config';
@@ -22,6 +22,8 @@ const inputClass =
   'w-full rounded-2xl bg-card px-3 py-2 text-sm outline-none ring-1 ring-border-strong focus:ring-primary';
 
 export default function DelegationsPage() {
+  const t = useTranslations('delegations');
+  const tCommon = useTranslations('common');
   const locale = useLocale() as Locale;
   const { user, ready } = useUser();
   const [rows, setRows] = useState<DelegationRow[] | null>(null);
@@ -39,11 +41,11 @@ export default function DelegationsPage() {
   }, [ready, user, load]);
 
   if (!ready || !user) {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{tCommon('loading')}</p>;
   }
 
   if (!ACCESS_ROLES.includes(user.role)) {
-    return <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">접근 불가</p>;
+    return <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">{t('accessDenied')}</p>;
   }
 
   async function remove(id: string) {
@@ -59,19 +61,19 @@ export default function DelegationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="부재 위임"
-        description="휴가·부재 시 검토·결재 권한을 지정 기간 동안 다른 사용자에게 위임합니다."
+        title={t('pageTitle')}
+        description={t('pageDescription')}
       />
 
       {error && (
         <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-300">{error}</p>
       )}
 
-      {!error && rows === null && <p className="text-muted">불러오는 중…</p>}
+      {!error && rows === null && <p className="text-muted">{tCommon('loading')}</p>}
 
       {rows !== null && rows.length === 0 && (
         <div className="rounded-2xl bg-card px-6 py-8 text-center ring-1 ring-border">
-          <p className="text-muted">등록된 위임이 없습니다.</p>
+          <p className="text-muted">{t('emptyList')}</p>
         </div>
       )}
 
@@ -80,11 +82,11 @@ export default function DelegationsPage() {
           <table className="w-full min-w-[820px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs font-semibold text-muted">
-                <th className="px-4 py-3">위임자</th>
-                <th className="px-4 py-3">대리인</th>
-                <th className="px-4 py-3">기간(KST)</th>
-                <th className="px-4 py-3">사유</th>
-                <th className="px-4 py-3">등록자</th>
+                <th className="px-4 py-3">{t('delegator')}</th>
+                <th className="px-4 py-3">{t('delegate')}</th>
+                <th className="px-4 py-3">{t('period')}</th>
+                <th className="px-4 py-3">{t('reason')}</th>
+                <th className="px-4 py-3">{t('createdBy')}</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -102,7 +104,7 @@ export default function DelegationsPage() {
                       onClick={() => remove(r.id)}
                       className="focusable rounded-2xl bg-card px-3 py-1.5 text-xs font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 dark:text-red-300 dark:ring-red-500/30 dark:hover:bg-red-500/15"
                     >
-                      해제
+                      {t('removeButton')}
                     </button>
                   </td>
                 </tr>
@@ -129,6 +131,7 @@ function DelegationForm({
   onError: (msg: string) => void;
   onChanged: () => Promise<unknown>;
 }) {
+  const t = useTranslations('delegations');
   const fid = useId();
   const isAdmin = user.role === 'ADMIN';
   const [reviewers, setReviewers] = useState<UserSummary[]>([]); // ADMIN 전용: 검토자 전체
@@ -168,11 +171,11 @@ function DelegationForm({
     e.preventDefault();
     onError('');
     if (!delegateId || !startsAt || !endsAt) {
-      onError('대리인과 시작·종료 일시는 필수입니다.');
+      onError(t('requiredFields'));
       return;
     }
     if (isAdmin && !delegatorId) {
-      onError('위임자를 선택하세요.');
+      onError(t('selectDelegatorRequired'));
       return;
     }
     setBusy(true);
@@ -202,7 +205,7 @@ function DelegationForm({
       <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 lg:items-end ${isAdmin ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
         {isAdmin && (
           <div>
-            <label htmlFor={`${fid}-delegator`} className="mb-1 block text-xs font-semibold text-muted">위임자</label>
+            <label htmlFor={`${fid}-delegator`} className="mb-1 block text-xs font-semibold text-muted">{t('delegator')}</label>
             <select
               id={`${fid}-delegator`}
               className={inputClass}
@@ -212,7 +215,7 @@ function DelegationForm({
                 setDelegateId('');
               }}
             >
-              <option value="">선택</option>
+              <option value="">{t('selectPlaceholder')}</option>
               {delegators.map((u) => (
                 <option key={u.id} value={u.id}>{u.name} ({u.department})</option>
               ))}
@@ -220,7 +223,7 @@ function DelegationForm({
           </div>
         )}
         <div>
-          <label htmlFor={`${fid}-delegate`} className="mb-1 block text-xs font-semibold text-muted">대리인</label>
+          <label htmlFor={`${fid}-delegate`} className="mb-1 block text-xs font-semibold text-muted">{t('delegate')}</label>
           <select
             id={`${fid}-delegate`}
             className={inputClass}
@@ -228,26 +231,26 @@ function DelegationForm({
             onChange={(e) => setDelegateId(e.target.value)}
             disabled={isAdmin && !delegatorId}
           >
-            <option value="">선택</option>
+            <option value="">{t('selectPlaceholder')}</option>
             {delegateCandidates.map((u) => (
               <option key={u.id} value={u.id}>{u.name} ({u.department})</option>
             ))}
           </select>
         </div>
         <div>
-          <label htmlFor={`${fid}-starts`} className="mb-1 block text-xs font-semibold text-muted">시작</label>
+          <label htmlFor={`${fid}-starts`} className="mb-1 block text-xs font-semibold text-muted">{t('start')}</label>
           <input id={`${fid}-starts`} type="datetime-local" className={inputClass} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
         </div>
         <div>
-          <label htmlFor={`${fid}-ends`} className="mb-1 block text-xs font-semibold text-muted">종료</label>
+          <label htmlFor={`${fid}-ends`} className="mb-1 block text-xs font-semibold text-muted">{t('end')}</label>
           <input id={`${fid}-ends`} type="datetime-local" className={inputClass} value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
         </div>
         <div>
-          <label htmlFor={`${fid}-reason`} className="mb-1 block text-xs font-semibold text-muted">사유</label>
-          <input id={`${fid}-reason`} className={inputClass} placeholder="예: 연차" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <label htmlFor={`${fid}-reason`} className="mb-1 block text-xs font-semibold text-muted">{t('reason')}</label>
+          <input id={`${fid}-reason`} className={inputClass} placeholder={t('reasonPlaceholder')} value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
         <button type="submit" disabled={busy} className="btn-primary px-4 py-2 text-sm">
-          {busy ? '등록 중…' : '위임 등록'}
+          {busy ? t('registering') : t('registerButton')}
         </button>
       </div>
     </form>

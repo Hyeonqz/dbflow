@@ -1,5 +1,31 @@
 {
-  "common": { "save": "저장", "cancel": "취소", "delete": "삭제", "create": "생성", "loading": "불러오는 중…", "logout": "로그아웃" },
+  "common": {
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "create": "생성",
+    "loading": "불러오는 중…",
+    "logout": "로그아웃",
+    "openMenu": "메뉴 열기",
+    "menu": "메뉴",
+    "collapseSidebar": "사이드바 접기",
+    "expandSidebar": "사이드바 펼치기"
+  },
+  "login": {
+    "heading": "로그인",
+    "tagline": "안전한 DB 변경 형상 관리",
+    "emailLabel": "이메일",
+    "passwordLabel": "비밀번호",
+    "passwordPlaceholder": "비밀번호를 입력하세요",
+    "submit": "로그인",
+    "submitting": "로그인 중…"
+  },
+  "theme": {
+    "light": "라이트",
+    "dark": "다크",
+    "system": "시스템",
+    "selectLabel": "테마 선택"
+  },
   "nav": {
     "dashboard": "대시보드",
     "changeRequests": "변경요청",

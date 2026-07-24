@@ -1,5 +1,31 @@
 {
-  "common": { "save": "Save", "cancel": "Cancel", "delete": "Delete", "create": "Create", "loading": "Loading…", "logout": "Log out" },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "loading": "Loading…",
+    "logout": "Log out",
+    "openMenu": "Open menu",
+    "menu": "Menu",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar"
+  },
+  "login": {
+    "heading": "Sign in",
+    "tagline": "Secure DB change configuration management",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "submit": "Sign in",
+    "submitting": "Signing in…"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "selectLabel": "Select theme"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "changeRequests": "Change Requests",

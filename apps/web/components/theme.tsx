@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, type ReactNode, type SVGProps } from 'react';
+import { useTranslations } from 'next-intl';
 import { MonitorIcon, MoonIcon, SunIcon } from '@/components/icons';
 
 export type Theme = 'light' | 'dark' | 'system';
@@ -53,19 +54,20 @@ export function useTheme() {
   return useContext(ThemeContext);
 }
 
-const OPTIONS: { value: Theme; label: string; Icon: (p: SVGProps<SVGSVGElement>) => JSX.Element }[] = [
-  { value: 'light', label: '라이트', Icon: SunIcon },
-  { value: 'dark', label: '다크', Icon: MoonIcon },
-  { value: 'system', label: '시스템', Icon: MonitorIcon },
+const OPTIONS: { value: Theme; labelKey: 'light' | 'dark' | 'system'; Icon: (p: SVGProps<SVGSVGElement>) => JSX.Element }[] = [
+  { value: 'light', labelKey: 'light', Icon: SunIcon },
+  { value: 'dark', labelKey: 'dark', Icon: MoonIcon },
+  { value: 'system', labelKey: 'system', Icon: MonitorIcon },
 ];
 
 /** 사이드바 하단용 컴팩트 3-상태 토글. */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
+  const t = useTranslations('theme');
   return (
     <div
       role="radiogroup"
-      aria-label="테마 선택"
+      aria-label={t('selectLabel')}
       className="flex gap-1 rounded-2xl bg-subtle p-1"
     >
       {OPTIONS.map((opt) => {
@@ -76,8 +78,8 @@ export function ThemeToggle() {
             type="button"
             role="radio"
             aria-checked={selected}
-            aria-label={opt.label}
-            title={opt.label}
+            aria-label={t(opt.labelKey)}
+            title={t(opt.labelKey)}
             onClick={() => setTheme(opt.value)}
             className={`focusable flex flex-1 items-center justify-center rounded-xl px-2 py-2 text-sm transition-colors ${
               selected ? 'bg-card text-ink ring-1 ring-border-strong' : 'text-muted hover:text-ink'

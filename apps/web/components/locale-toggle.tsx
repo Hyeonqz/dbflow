@@ -4,6 +4,9 @@ import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { LOCALE_COOKIE } from '@/i18n/config';
 
+// ponytail: labels are each locale's own native name, so they're intentionally
+// not run through the message catalog — they must render the same regardless
+// of the active locale (like "Deutsch"/"日本語" in a real language picker).
 const OPTIONS = [
   { value: 'en', label: 'EN' },
   { value: 'ko', label: '한' },

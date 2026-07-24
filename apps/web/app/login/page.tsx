@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { login } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useTranslations('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -38,13 +40,13 @@ export default function LoginPage() {
     <main className="grid min-h-screen place-items-center px-6">
       <div className="w-full max-w-sm">
         <div className="text-xl font-bold text-primary">DBFlow</div>
-        <h1 className="mt-6 text-2xl font-bold text-ink">로그인</h1>
-        <p className="mt-2 text-muted">안전한 DB 변경 형상 관리</p>
+        <h1 className="mt-6 text-2xl font-bold text-ink">{t('heading')}</h1>
+        <p className="mt-2 text-muted">{t('tagline')}</p>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
           <div className="space-y-1.5">
             <label htmlFor="email" className="block text-sm font-medium text-ink">
-              이메일
+              {t('emailLabel')}
             </label>
             <input
               id="email"
@@ -59,14 +61,14 @@ export default function LoginPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="password" className="block text-sm font-medium text-ink">
-              비밀번호
+              {t('passwordLabel')}
             </label>
             <input
               id="password"
               type="password"
               autoComplete="current-password"
               className={inputClass}
-              placeholder="비밀번호를 입력하세요"
+              placeholder={t('passwordPlaceholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -79,7 +81,7 @@ export default function LoginPage() {
           )}
 
           <button type="submit" disabled={submitting} className="btn-primary w-full px-4 py-3">
-            {submitting ? '로그인 중…' : '로그인'}
+            {submitting ? t('submitting') : t('submit')}
           </button>
         </form>
       </div>

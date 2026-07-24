@@ -51,6 +51,7 @@ export function Sidebar({
   const pathname = usePathname();
   const t = useTranslations('nav');
   const tEnum = useTranslations('enum');
+  const tCommon = useTranslations('common');
   const items = NAV.filter((it) => !it.roles || it.roles.includes(user.role));
 
   return (
@@ -67,7 +68,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onToggle}
-            aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            aria-label={collapsed ? tCommon('expandSidebar') : tCommon('collapseSidebar')}
             aria-expanded={!collapsed}
             className="focusable inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted hover:bg-subtle hover:text-ink"
           >
@@ -119,7 +120,7 @@ export function Sidebar({
             }}
             className="focusable w-full rounded-2xl bg-subtle px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-border-strong"
           >
-            로그아웃
+            {tCommon('logout')}
           </button>
         </div>
       )}

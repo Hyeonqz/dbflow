@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import { Sidebar } from '@/components/sidebar';
 import { MenuIcon } from '@/components/icons';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, ready } = useUser();
+  const t = useTranslations('common');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -47,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // 가드: 훅이 /login으로 리다이렉트하는 동안 로딩 표시
   if (!ready || !user) {
-    return <div className="p-6 text-muted">불러오는 중…</div>;
+    return <div className="p-6 text-muted">{t('loading')}</div>;
   }
 
   return (
@@ -66,7 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <button
           ref={triggerRef}
           type="button"
-          aria-label="메뉴 열기"
+          aria-label={t('openMenu')}
           aria-expanded={drawerOpen}
           onClick={() => setDrawerOpen(true)}
           className="focusable inline-flex h-11 w-11 items-center justify-center rounded-xl text-ink hover:bg-subtle"
@@ -88,7 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ref={drawerRef}
             role="dialog"
             aria-modal="true"
-            aria-label="메뉴"
+            aria-label={t('menu')}
             tabIndex={-1}
             className="fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card outline-none"
           >

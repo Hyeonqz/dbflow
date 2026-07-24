@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import { downloadAuditExport, listAuditLogs, type AuditLogRow, type AuditQuery } from '@/lib/api';
-import { ROLE_LABEL, type Role } from '@/lib/auth';
+import type { Role } from '@/lib/auth';
 import { PageHeader } from '@/components/page-header';
 import { formatDateTime } from '@/lib/format';
 
@@ -29,6 +30,8 @@ function toIsoRange(date: string, edge: 'start' | 'end'): string | undefined {
 }
 
 export default function AuditPage() {
+  const t = useTranslations('audit');
+  const tCommon = useTranslations('common');
   const { user, ready } = useUser();
   const [draft, setDraft] = useState<Filters>(EMPTY_FILTERS);
   const [applied, setApplied] = useState<Filters>(EMPTY_FILTERS);
@@ -90,11 +93,11 @@ export default function AuditPage() {
   }
 
   if (!ready || !user) {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{tCommon('loading')}</p>;
   }
 
   if (user.role !== 'ADMIN') {
-    return <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">접근 불가</p>;
+    return <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">{t('accessDenied')}</p>;
   }
 
   const totalPages = result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1;
@@ -102,8 +105,8 @@ export default function AuditPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="감사 로그"
-        description="모든 인증·변경요청·대상 DB 작업 이력을 조회하고 내보냅니다."
+        title={t('pageTitle')}
+        description={t('pageDescription')}
         action={
           <div className="flex gap-2">
             <button
@@ -112,7 +115,7 @@ export default function AuditPage() {
               disabled={exporting !== null}
               className="focusable rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
             >
-              {exporting === 'csv' ? '내보내는 중…' : 'CSV 내보내기'}
+              {exporting === 'csv' ? t('exporting') : t('exportCsv')}
             </button>
             <button
               type="button"
@@ -120,7 +123,7 @@ export default function AuditPage() {
               disabled={exporting !== null}
               className="focusable rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
             >
-              {exporting === 'json' ? '내보내는 중…' : 'JSON 내보내기'}
+              {exporting === 'json' ? t('exporting') : t('exportJson')}
             </button>
           </div>
         }
@@ -133,54 +136,54 @@ export default function AuditPage() {
       <form onSubmit={applyFilters} className="rounded-2xl bg-card p-4 ring-1 ring-border">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <div className="lg:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-muted">행위자 ID</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">{t('actorLabel')}</label>
             <input
               className={inputClass}
-              placeholder="행위자 사용자 ID"
+              placeholder={t('actorPlaceholder')}
               value={draft.actor}
               onChange={(e) => setDraft((f) => ({ ...f, actor: e.target.value }))}
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted">액션</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">{t('actionLabel')}</label>
             <select
               className={inputClass}
               value={draft.action}
               onChange={(e) => setDraft((f) => ({ ...f, action: e.target.value }))}
             >
-              <option value="">전체</option>
+              <option value="">{t('all')}</option>
               {ACTION_OPTIONS.map((a) => (
                 <option key={a} value={a}>{a}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted">대상 유형</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">{t('targetTypeLabel')}</label>
             <select
               className={inputClass}
               value={draft.targetType}
               onChange={(e) => setDraft((f) => ({ ...f, targetType: e.target.value }))}
             >
-              <option value="">전체</option>
-              {TARGET_TYPE_OPTIONS.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              <option value="">{t('all')}</option>
+              {TARGET_TYPE_OPTIONS.map((tt) => (
+                <option key={tt} value={tt}>{tt}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted">결과</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">{t('outcomeLabel')}</label>
             <select
               className={inputClass}
               value={draft.outcome}
               onChange={(e) => setDraft((f) => ({ ...f, outcome: e.target.value }))}
             >
-              <option value="">전체</option>
+              <option value="">{t('all')}</option>
               <option value="SUCCESS">SUCCESS</option>
               <option value="FAILURE">FAILURE</option>
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted">시작일</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">{t('fromLabel')}</label>
             <input
               type="date"
               className={inputClass}
@@ -189,7 +192,7 @@ export default function AuditPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted">종료일</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">{t('toLabel')}</label>
             <input
               type="date"
               className={inputClass}
@@ -199,16 +202,16 @@ export default function AuditPage() {
           </div>
         </div>
         <div className="mt-3 flex justify-end">
-          <button type="submit" className="btn-primary px-4 py-2 text-sm">검색</button>
+          <button type="submit" className="btn-primary px-4 py-2 text-sm">{t('searchButton')}</button>
         </div>
       </form>
 
       <section>
-        {!error && result === null && <p className="text-muted">불러오는 중…</p>}
+        {!error && result === null && <p className="text-muted">{tCommon('loading')}</p>}
 
         {!error && result !== null && result.items.length === 0 && (
           <div className="rounded-2xl bg-card px-6 py-12 text-center ring-1 ring-border">
-            <p className="text-muted">조건에 맞는 감사 로그가 없습니다.</p>
+            <p className="text-muted">{t('emptyList')}</p>
           </div>
         )}
 
@@ -218,12 +221,12 @@ export default function AuditPage() {
               <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-xs font-semibold text-muted">
-                    <th className="px-4 py-3">시각</th>
-                    <th className="px-4 py-3">행위자</th>
-                    <th className="px-4 py-3">액션</th>
-                    <th className="px-4 py-3">대상</th>
-                    <th className="px-4 py-3">결과</th>
-                    <th className="px-4 py-3">요약</th>
+                    <th className="px-4 py-3">{t('colTime')}</th>
+                    <th className="px-4 py-3">{t('colActor')}</th>
+                    <th className="px-4 py-3">{t('colAction')}</th>
+                    <th className="px-4 py-3">{t('colTarget')}</th>
+                    <th className="px-4 py-3">{t('colOutcome')}</th>
+                    <th className="px-4 py-3">{t('colSummary')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -241,7 +244,7 @@ export default function AuditPage() {
 
             <div className="mt-4 flex items-center justify-between text-sm text-muted">
               <span>
-                총 {result.total}건 · {result.page}/{totalPages} 페이지
+                {t('paginationSummary', { total: result.total, page: result.page, totalPages })}
               </span>
               <div className="flex gap-2">
                 <button
@@ -250,7 +253,7 @@ export default function AuditPage() {
                   disabled={page <= 1}
                   className="focusable rounded-2xl bg-card px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
                 >
-                  이전
+                  {t('prevPage')}
                 </button>
                 <button
                   type="button"
@@ -258,7 +261,7 @@ export default function AuditPage() {
                   disabled={page >= totalPages}
                   className="focusable rounded-2xl bg-card px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
                 >
-                  다음
+                  {t('nextPage')}
                 </button>
               </div>
             </div>
@@ -273,7 +276,13 @@ export default function AuditPage() {
 // 행 클릭 시 metadata를 펼쳐 보여주는 감사 로그 한 줄
 // ---------------------------------------------------------------------------
 function AuditRow({ row, expanded, onToggle }: { row: AuditLogRow; expanded: boolean; onToggle: () => void }) {
-  const roleLabel = row.actorRole ? ROLE_LABEL[row.actorRole as Role] ?? row.actorRole : null;
+  const t = useTranslations('audit');
+  const tEnum = useTranslations('enum');
+  const roleLabel = row.actorRole
+    ? tEnum.has(`role.${row.actorRole}`)
+      ? tEnum(`role.${row.actorRole as Role}`)
+      : row.actorRole
+    : null;
 
   return (
     <>
@@ -292,7 +301,7 @@ function AuditRow({ row, expanded, onToggle }: { row: AuditLogRow; expanded: boo
       >
         <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(row.createdAt)}</td>
         <td className="px-4 py-3">
-          <p className="font-semibold text-ink">{row.actorName ?? row.actorId ?? '시스템'}</p>
+          <p className="font-semibold text-ink">{row.actorName ?? row.actorId ?? t('systemActor')}</p>
           {(row.actorDept || roleLabel) && (
             <p className="text-xs text-muted">
               {[row.actorDept, roleLabel].filter(Boolean).join(' · ')}
@@ -323,7 +332,7 @@ function AuditRow({ row, expanded, onToggle }: { row: AuditLogRow; expanded: boo
             <details open className="text-xs">
               <summary className="cursor-pointer font-semibold text-ink">metadata</summary>
               <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-muted">
-                {row.metadata != null ? JSON.stringify(row.metadata, null, 2) : '없음'}
+                {row.metadata != null ? JSON.stringify(row.metadata, null, 2) : t('noMetadata')}
               </pre>
               {(row.ip || row.userAgent) && (
                 <p className="mt-2 text-muted">

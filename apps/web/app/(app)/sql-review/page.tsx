@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import {
   listSqlReviewPolicy,
@@ -25,6 +26,8 @@ function levelClass(level: SqlReviewLevel): string {
 }
 
 export default function SqlReviewPolicyPage() {
+  const t = useTranslations('sqlReview');
+  const tCommon = useTranslations('common');
   const { user, ready } = useUser();
   const [rules, setRules] = useState<SqlReviewRuleRow[] | null>(null);
   const [error, setError] = useState('');
@@ -57,18 +60,18 @@ export default function SqlReviewPolicyPage() {
   }
 
   if (!ready || !user) {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{tCommon('loading')}</p>;
   }
 
   if (user.role !== 'ADMIN') {
-    return <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">접근 불가</p>;
+    return <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">{t('accessDenied')}</p>;
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="SQL 리뷰 정책"
-        description="환경별로 SQL 린트 규칙의 심각도를 조정합니다."
+        title={t('pageTitle')}
+        description={t('pageDescription')}
       />
 
       {error && (
@@ -76,11 +79,11 @@ export default function SqlReviewPolicyPage() {
       )}
 
       <section>
-        {!error && rules === null && <p className="text-muted">불러오는 중…</p>}
+        {!error && rules === null && <p className="text-muted">{tCommon('loading')}</p>}
 
         {rules !== null && rules.length === 0 && (
           <div className="rounded-2xl bg-card px-6 py-12 text-center ring-1 ring-border">
-            <p className="text-muted">등록된 규칙이 없습니다.</p>
+            <p className="text-muted">{t('emptyList')}</p>
           </div>
         )}
 
@@ -89,7 +92,7 @@ export default function SqlReviewPolicyPage() {
             <table className="w-full min-w-[720px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs font-semibold text-muted">
-                  <th className="px-4 py-3">규칙</th>
+                  <th className="px-4 py-3">{t('ruleColumn')}</th>
                   {ENV_COLUMNS.map((env) => (
                     <th key={env} className="px-4 py-3">{env}</th>
                   ))}

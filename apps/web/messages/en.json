@@ -389,5 +389,20 @@
     "passwordHint": "(8+ characters)",
     "registering": "Registering…",
     "register": "Register"
+  },
+  "sqlReview": {
+    "pageTitle": "SQL Review Policy",
+    "pageDescription": "Adjust the severity of SQL lint rules per environment.",
+    "accessDenied": "Access denied",
+    "emptyList": "No rules registered.",
+    "ruleColumn": "Rule"
+  },
+  "approvalPolicy": {
+    "pageTitle": "Approval Policy",
+    "pageDescription": "Adjust the number of required approvers per environment.",
+    "accessDenied": "Access denied",
+    "emptyList": "No policies registered.",
+    "envColumn": "Environment",
+    "requiredApprovalsColumn": "Required approvals"
   }
 }

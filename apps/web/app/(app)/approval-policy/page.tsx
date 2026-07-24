@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import { listApprovalPolicy, updateApprovalPolicy, type ApprovalPolicyRow } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
@@ -11,6 +12,8 @@ const inputClass =
   'rounded-2xl bg-card px-2 py-1.5 text-xs font-semibold outline-none ring-1 ring-border-strong focus:ring-primary';
 
 export default function ApprovalPolicyPage() {
+  const t = useTranslations('approvalPolicy');
+  const tCommon = useTranslations('common');
   const { user, ready } = useUser();
   const [rows, setRows] = useState<ApprovalPolicyRow[] | null>(null);
   const [error, setError] = useState('');
@@ -41,18 +44,18 @@ export default function ApprovalPolicyPage() {
   }
 
   if (!ready || !user) {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{tCommon('loading')}</p>;
   }
 
   if (user.role !== 'ADMIN') {
-    return <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">접근 불가</p>;
+    return <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">{t('accessDenied')}</p>;
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="결재 정책"
-        description="환경별로 최종 결재에 필요한 결재자 수를 조정합니다."
+        title={t('pageTitle')}
+        description={t('pageDescription')}
       />
 
       {error && (
@@ -60,11 +63,11 @@ export default function ApprovalPolicyPage() {
       )}
 
       <section>
-        {!error && rows === null && <p className="text-muted">불러오는 중…</p>}
+        {!error && rows === null && <p className="text-muted">{tCommon('loading')}</p>}
 
         {rows !== null && rows.length === 0 && (
           <div className="rounded-2xl bg-card px-6 py-12 text-center ring-1 ring-border">
-            <p className="text-muted">등록된 정책이 없습니다.</p>
+            <p className="text-muted">{t('emptyList')}</p>
           </div>
         )}
 
@@ -73,8 +76,8 @@ export default function ApprovalPolicyPage() {
             <table className="w-full min-w-[420px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs font-semibold text-muted">
-                  <th className="px-4 py-3">환경</th>
-                  <th className="px-4 py-3">필요 결재자 수</th>
+                  <th className="px-4 py-3">{t('envColumn')}</th>
+                  <th className="px-4 py-3">{t('requiredApprovalsColumn')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">

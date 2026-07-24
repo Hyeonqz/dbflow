@@ -389,5 +389,20 @@
     "passwordHint": "(8자 이상)",
     "registering": "등록 중…",
     "register": "등록"
+  },
+  "sqlReview": {
+    "pageTitle": "SQL 리뷰 정책",
+    "pageDescription": "환경별로 SQL 린트 규칙의 심각도를 조정합니다.",
+    "accessDenied": "접근 불가",
+    "emptyList": "등록된 규칙이 없습니다.",
+    "ruleColumn": "규칙"
+  },
+  "approvalPolicy": {
+    "pageTitle": "결재 정책",
+    "pageDescription": "환경별로 최종 결재에 필요한 결재자 수를 조정합니다.",
+    "accessDenied": "접근 불가",
+    "emptyList": "등록된 정책이 없습니다.",
+    "envColumn": "환경",
+    "requiredApprovalsColumn": "필요 결재자 수"
   }
 }

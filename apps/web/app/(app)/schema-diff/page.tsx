@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useCurrentUser } from '@/lib/auth';
 import {
   applySchemaDiffToChangeRequest,
@@ -19,6 +20,8 @@ const inputClass =
   'w-full rounded-2xl bg-card px-4 py-3 outline-none ring-1 ring-border-strong focus:ring-primary';
 
 export default function SchemaDiffPage() {
+  const t = useTranslations('schemaDiff');
+  const tCommon = useTranslations('common');
   const { user, ready } = useCurrentUser();
   const router = useRouter();
 
@@ -45,13 +48,13 @@ export default function SchemaDiffPage() {
   }, [ready, user, loadDbs]);
 
   if (!ready || !user) {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{tCommon('loading')}</p>;
   }
 
   if (user.role === 'REVIEWER') {
     return (
       <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">
-        스키마 Diff 생성기는 개발자·결재자만 사용할 수 있습니다.
+        {t('reviewerBlocked')}
       </p>
     );
   }
@@ -60,11 +63,11 @@ export default function SchemaDiffPage() {
 
   async function runPreview() {
     if (!targetId) {
-      setError('대상 DB를 선택해 주세요.');
+      setError(t('targetDbRequired'));
       return;
     }
     if (!desiredSql.trim()) {
-      setError('기준 스키마 DDL을 입력해 주세요.');
+      setError(t('desiredSqlRequired'));
       return;
     }
     setPreviewing(true);
@@ -86,8 +89,8 @@ export default function SchemaDiffPage() {
   return (
     <>
       <PageHeader
-        title="스키마 Diff 생성기"
-        description="기준 스키마와 대상 DB의 실제 스키마를 비교해 차이를 DDL로 산출합니다."
+        title={t('pageTitle')}
+        description={t('pageDescription')}
       />
 
       {error && (
@@ -97,14 +100,14 @@ export default function SchemaDiffPage() {
       <section className="mt-6 space-y-5 rounded-2xl bg-card p-5 ring-1 ring-border">
         <div className="space-y-2">
           <label htmlFor="target-db" className="block text-sm font-semibold">
-            대상 DB
+            {t('targetDbLabel')}
           </label>
           {dbs === null ? (
-            <p className="text-sm text-muted">불러오는 중…</p>
+            <p className="text-sm text-muted">{tCommon('loading')}</p>
           ) : dbs.length === 0 ? (
             <p className="rounded-2xl bg-subtle px-4 py-3 text-sm text-muted">
-              접근 가능한 대상 DB가 없습니다.
-              {canCreateCr && ' 개발자는 DEV 환경 대상만 비교할 수 있습니다.'}
+              {t('targetDbEmpty')}
+              {canCreateCr && t('targetDbEmptyDevHint')}
             </p>
           ) : (
             <select
@@ -116,10 +119,10 @@ export default function SchemaDiffPage() {
                 setPreview(null);
               }}
             >
-              <option value="">선택하세요</option>
+              <option value="">{t('targetDbPlaceholder')}</option>
               {dbs.map((d) => (
                 <option key={d.id} value={d.id}>
-                  [{d.env}] {d.name} — {d.host}:{d.port}/{d.database}
+                  {t('targetDbOption', { env: d.env, name: d.name, host: d.host, port: d.port, database: d.database })}
                 </option>
               ))}
             </select>
@@ -128,7 +131,7 @@ export default function SchemaDiffPage() {
 
         <div className="space-y-2">
           <label htmlFor="desired-sql" className="block text-sm font-semibold">
-            기준 스키마 DDL
+            {t('desiredSqlLabel')}
           </label>
           <textarea
             id="desired-sql"
@@ -139,12 +142,12 @@ export default function SchemaDiffPage() {
             onChange={(e) => setDesiredSql(e.target.value)}
           />
           <p className="text-xs text-muted">
-            CREATE TABLE 문 모음을 입력하세요. 여러 문장은 세미콜론(;)으로 구분합니다.
+            {t('desiredSqlHint')}
           </p>
         </div>
 
         <button onClick={runPreview} disabled={previewing} className="btn-primary w-full px-4 py-3 text-sm">
-          {previewing ? '비교 중…' : 'Diff 미리보기'}
+          {previewing ? t('comparing') : t('previewButton')}
         </button>
       </section>
 
@@ -180,6 +183,7 @@ function DiffResult({
   onError: (msg: string) => void;
   onCreated: (id: string) => void;
 }) {
+  const t = useTranslations('schemaDiff');
   const { currentSnapshotSummary: snap, diff, hasChanges } = preview;
   const destructiveCount = diff.filter((d) => d.destructive).length;
   const [showForm, setShowForm] = useState(false);
@@ -187,22 +191,22 @@ function DiffResult({
   return (
     <section className="mt-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-ink">Diff 결과</h2>
+        <h2 className="text-base font-semibold text-ink">{t('resultTitle')}</h2>
         <span className="text-xs text-muted">
-          {snap.database} · 테이블 {snap.tableCount}개
+          {t('tableCount', { database: snap.database, count: snap.tableCount })}
         </span>
       </div>
 
       {!hasChanges ? (
         <div className="mt-3 rounded-2xl bg-card px-6 py-10 text-center ring-1 ring-border">
-          <p className="text-muted">차이가 없습니다. 대상 DB가 이미 기준 스키마와 일치합니다.</p>
+          <p className="text-muted">{t('noChanges')}</p>
         </div>
       ) : (
         <>
           {destructiveCount > 0 && (
             <p className="mt-3 flex items-start gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600 dark:bg-red-500/15 dark:text-red-300">
               <AlertIcon className="mt-0.5 shrink-0" width={18} height={18} />
-              <span>파괴적 변경 {destructiveCount}건이 포함되어 있습니다. 데이터 손실에 주의하세요.</span>
+              <span>{t('destructiveWarning', { count: destructiveCount })}</span>
             </p>
           )}
 
@@ -214,7 +218,7 @@ function DiffResult({
 
           {canCreateCr && !showForm && (
             <button onClick={() => setShowForm(true)} className="btn-primary mt-5 w-full px-4 py-3 text-sm">
-              변경요청으로 생성
+              {t('createCrButton')}
             </button>
           )}
 
@@ -234,6 +238,7 @@ function DiffResult({
 }
 
 function DiffCard({ item }: { item: DiffItem }) {
+  const t = useTranslations('schemaDiff');
   return (
     <li
       className={`overflow-hidden rounded-2xl ring-1 ${
@@ -246,7 +251,7 @@ function DiffCard({ item }: { item: DiffItem }) {
           <span className="font-mono text-sm text-ink">{item.table}</span>
         </div>
         {item.destructive && (
-          <span className="text-xs font-semibold text-red-600 dark:text-red-300">파괴적</span>
+          <span className="text-xs font-semibold text-red-600 dark:text-red-300">{t('destructiveBadge')}</span>
         )}
       </div>
       <pre className="overflow-x-auto bg-code px-4 py-3 text-xs leading-relaxed text-code-fg">
@@ -269,6 +274,7 @@ function CreateCrForm({
   onError: (msg: string) => void;
   onCreated: (id: string) => void;
 }) {
+  const t = useTranslations('schemaDiff');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
@@ -276,14 +282,14 @@ function CreateCrForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     onError('');
-    const t = title.trim();
-    const d = description.trim();
-    if (!t) {
-      onError('제목을 입력해 주세요.');
+    const titleValue = title.trim();
+    const descriptionValue = description.trim();
+    if (!titleValue) {
+      onError(t('titleRequired'));
       return;
     }
-    if (!d) {
-      onError('설명을 입력해 주세요.');
+    if (!descriptionValue) {
+      onError(t('descriptionRequired'));
       return;
     }
     setBusy(true);
@@ -291,8 +297,8 @@ function CreateCrForm({
       const cr = await applySchemaDiffToChangeRequest({
         targetDatabaseId,
         desiredSchemaSql,
-        title: t,
-        description: d,
+        title: titleValue,
+        description: descriptionValue,
       });
       onCreated(cr.id);
     } catch (err) {
@@ -303,34 +309,34 @@ function CreateCrForm({
 
   return (
     <form onSubmit={submit} className="mt-5 space-y-4 rounded-2xl bg-card p-5 ring-1 ring-border">
-      <h3 className="text-sm font-semibold">변경요청으로 생성</h3>
+      <h3 className="text-sm font-semibold">{t('createCrHeading')}</h3>
       <div className="space-y-2">
         <label htmlFor="cr-title" className="block text-sm font-medium text-muted">
-          제목
+          {t('titleLabel')}
         </label>
         <input
           id="cr-title"
           className={inputClass}
-          placeholder="예: users 스키마 정합화"
+          placeholder={t('titlePlaceholder')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
       </div>
       <div className="space-y-2">
         <label htmlFor="cr-desc" className="block text-sm font-medium text-muted">
-          설명
+          {t('descriptionLabel')}
         </label>
         <textarea
           id="cr-desc"
           className={`${inputClass} min-h-[88px] resize-y`}
-          placeholder="변경 배경과 영향 범위를 적어주세요."
+          placeholder={t('descriptionPlaceholder')}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
       <div className="flex gap-3">
         <button type="submit" disabled={busy} className="btn-primary flex-1 px-4 py-2.5 text-sm">
-          {busy ? '생성 중…' : '변경요청 생성'}
+          {busy ? t('creating') : t('createSubmit')}
         </button>
         <button
           type="button"
@@ -338,7 +344,7 @@ function CreateCrForm({
           disabled={busy}
           className="focusable rounded-2xl bg-card px-4 py-2.5 text-sm font-semibold text-muted ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
         >
-          취소
+          {t('cancel')}
         </button>
       </div>
     </form>

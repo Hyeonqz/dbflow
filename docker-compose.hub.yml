@@ -1,0 +1,61 @@
+# DBFlow 셀프호스팅 — Docker Hub 사전 빌드 이미지로 기동(빌드 불필요).
+# 사용법:
+#   cp .env.example .env   # 시크릿·관리자 env 수정
+#   # 아래 두 값을 .env에 추가(또는 환경변수로): 이미지 네임스페이스/버전
+#   #   DBFLOW_IMAGE_NAMESPACE=<Docker Hub 사용자/조직명>
+#   #   DBFLOW_VERSION=v0.1.0        # 미지정 시 latest
+#   docker compose -f docker-compose.hub.yml pull
+#   docker compose -f docker-compose.hub.yml up -d
+# 소스에서 빌드하려면 대신 docker-compose.yml 을 사용.
+# 개발 스택(docker/docker-compose.yml, ./start.sh)과 프로젝트명·볼륨·포트가 분리되어 공존 가능.
+name: dbflow
+
+services:
+  mysql:
+    image: mysql:8.0
+    # binlog가 기본 켜진 MySQL 8.0에서 앱 유저(dbflow, DB 범위 권한)가 audit_log의
+    # append-only 트리거를 생성할 수 있게 함(없으면 마이그레이션이 ERROR 1419로 실패).
+    command: ["--log-bin-trust-function-creators=1"]
+    environment:
+      MYSQL_DATABASE: dbflow
+      MYSQL_USER: dbflow
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?".env에 MYSQL_PASSWORD를 설정하세요"}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?".env에 MYSQL_ROOT_PASSWORD를 설정하세요"}
+    volumes:
+      - dbflow_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    image: ${DBFLOW_IMAGE_NAMESPACE:-dbflow}/dbflow-api:${DBFLOW_VERSION:-latest}
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql://dbflow:${MYSQL_PASSWORD}@mysql:3306/dbflow
+      TZ: Asia/Seoul
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    image: ${DBFLOW_IMAGE_NAMESPACE:-dbflow}/dbflow-web:${DBFLOW_VERSION:-latest}
+    environment:
+      DBFLOW_API_URL: http://api:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  dbflow_mysql_data:

@@ -1,0 +1,54 @@
+# DBFlow 셀프호스팅 스택 — 사용법: cp .env.example .env && (시크릿 수정) && docker compose up -d
+# 개발 스택(docker/docker-compose.yml, ./start.sh)과 프로젝트명·볼륨·포트가 분리되어 공존 가능.
+name: dbflow
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: dbflow
+      MYSQL_USER: dbflow
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?".env에 MYSQL_PASSWORD를 설정하세요"}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?".env에 MYSQL_ROOT_PASSWORD를 설정하세요"}
+    volumes:
+      - dbflow_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql://dbflow:${MYSQL_PASSWORD}@mysql:3306/dbflow
+      TZ: Asia/Seoul
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      DBFLOW_API_URL: http://api:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  dbflow_mysql_data:

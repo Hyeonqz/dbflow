@@ -54,6 +54,22 @@ Open **http://localhost:3000** and sign in with the admin credentials you set. T
 
 > **Evaluation only:** set `DBFLOW_DEMO=true` to seed four demo accounts (password `password1234`), sample SQL-review rules, and default approval policies. Never enable this in production.
 
+### Run from prebuilt images (Docker Hub)
+
+To skip the local build and pull published images instead, use `docker-compose.hub.yml`. Set the image namespace and version in `.env` (or your environment):
+
+```bash
+DBFLOW_IMAGE_NAMESPACE=<docker-hub-namespace>   # e.g. your Docker Hub username
+DBFLOW_VERSION=v0.1.0                            # omit for :latest
+```
+
+```bash
+docker compose -f docker-compose.hub.yml pull
+docker compose -f docker-compose.hub.yml up -d
+```
+
+Images are `linux/amd64` + `linux/arm64` and published by the `docker-publish` GitHub Actions workflow on each `v*` tag.
+
 ## Configuration
 
 All configuration is via environment variables — see `.env.example` for the annotated list.

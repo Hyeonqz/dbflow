@@ -362,5 +362,32 @@
     "recentTitle": "최근 변경 요청",
     "viewAll": "전체 보기 →",
     "emptyRecent": "아직 변경 요청이 없습니다."
+  },
+  "users": {
+    "loading": "불러오는 중…",
+    "accessDenied": "접근 불가",
+    "pageTitle": "사용자 관리",
+    "pageDescription": "새 사용자를 등록하고 전체 역할 목록을 확인합니다.",
+    "registerHeading": "새 사용자 등록",
+    "listHeading": "사용자 목록",
+    "roleLabel": "역할",
+    "all": "전체",
+    "searchAriaLabel": "이름·이메일 검색",
+    "searchPlaceholder": "이름 또는 이메일 검색",
+    "emptyList": "등록된 사용자가 없습니다.",
+    "paginationSummary": "총 {total}건 · {page}/{totalPages} 페이지",
+    "prevPage": "이전",
+    "nextPage": "다음",
+    "validationRequired": "이메일·이름·부서는 필수입니다.",
+    "validationPassword": "초기 비밀번호는 8자 이상이어야 합니다.",
+    "emailLabel": "이메일",
+    "nameLabel": "이름",
+    "namePlaceholder": "홍길동",
+    "departmentLabel": "부서",
+    "departmentPlaceholder": "플랫폼팀",
+    "passwordLabel": "초기 비밀번호",
+    "passwordHint": "(8자 이상)",
+    "registering": "등록 중…",
+    "register": "등록"
   }
 }

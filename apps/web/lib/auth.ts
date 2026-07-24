@@ -13,14 +13,6 @@ export type User = {
   role: Role;
 };
 
-// English fallback for consumers not yet on useTranslations('enum').role.* (see i18n Task 2 report).
-export const ROLE_LABEL: Record<Role, string> = {
-  DEVELOPER: 'Developer',
-  REVIEWER: 'Reviewer (DBA)',
-  APPROVER: 'Approver',
-  ADMIN: 'Admin',
-};
-
 /** Read the current user from localStorage (SSR-safe). */
 export function readUser(): User | null {
   if (typeof window === 'undefined') return null;

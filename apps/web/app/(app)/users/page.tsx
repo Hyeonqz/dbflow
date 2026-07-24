@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import { adminListUsers, createUser, type AdminUser, type AdminUserInput, type Paginated } from '@/lib/api';
-import { ROLE_LABEL, type Role } from '@/lib/auth';
+import { type Role } from '@/lib/auth';
 import { PageHeader } from '@/components/page-header';
 import { formatDateTime } from '@/lib/format';
 
@@ -13,6 +14,8 @@ const inputClass =
   'w-full rounded-2xl bg-card px-4 py-3 outline-none ring-1 ring-border-strong focus:ring-primary';
 
 export default function UsersPage() {
+  const t = useTranslations('users');
+  const tEnum = useTranslations('enum');
   const { user, ready } = useUser();
   const [role, setRole] = useState<Role | ''>('');
   const [q, setQ] = useState('');
@@ -23,11 +26,11 @@ export default function UsersPage() {
   const seqRef = useRef(0);
 
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setDebouncedQ(q);
       setPage(1);
     }, 300);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [q]);
 
   const load = useCallback((p: number, r: Role | '', query: string) => {
@@ -44,12 +47,12 @@ export default function UsersPage() {
   }, [page, role, debouncedQ, load, user]);
 
   if (!ready || !user) {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{t('loading')}</p>;
   }
 
   if (user.role !== 'ADMIN') {
     return (
-      <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">접근 불가</p>
+      <p className="rounded-2xl bg-card px-6 py-5 text-muted ring-1 ring-border">{t('accessDenied')}</p>
     );
   }
 
@@ -57,14 +60,14 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="사용자 관리" description="새 사용자를 등록하고 전체 역할 목록을 확인합니다." />
+      <PageHeader title={t('pageTitle')} description={t('pageDescription')} />
 
       {error && (
         <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-300">{error}</p>
       )}
 
       <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
-        <h2 className="text-base font-semibold text-ink">새 사용자 등록</h2>
+        <h2 className="text-base font-semibold text-ink">{t('registerHeading')}</h2>
         <UserForm
           onError={setError}
           onSubmit={async (values) => {
@@ -75,29 +78,29 @@ export default function UsersPage() {
       </section>
 
       <section>
-        <h2 className="text-base font-semibold text-ink">사용자 목록</h2>
+        <h2 className="text-base font-semibold text-ink">{t('listHeading')}</h2>
 
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <select
             className={inputClass}
-            aria-label="역할"
+            aria-label={t('roleLabel')}
             value={role}
             onChange={(e) => {
               setPage(1);
               setRole(e.target.value as Role | '');
             }}
           >
-            <option value="">전체</option>
+            <option value="">{t('all')}</option>
             {ROLE_OPTIONS.map((r) => (
               <option key={r} value={r}>
-                {ROLE_LABEL[r]}
+                {tEnum.has(`role.${r}`) ? tEnum(`role.${r as Role}`) : r}
               </option>
             ))}
           </select>
           <input
             className={inputClass}
-            aria-label="이름·이메일 검색"
-            placeholder="이름 또는 이메일 검색"
+            aria-label={t('searchAriaLabel')}
+            placeholder={t('searchPlaceholder')}
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
@@ -105,11 +108,11 @@ export default function UsersPage() {
           />
         </div>
 
-        {!error && result === null && <p className="mt-3 text-muted">불러오는 중…</p>}
+        {!error && result === null && <p className="mt-3 text-muted">{t('loading')}</p>}
 
         {!error && result !== null && result.items.length === 0 && (
           <div className="mt-3 rounded-2xl bg-card px-6 py-12 text-center ring-1 ring-border">
-            <p className="text-muted">등록된 사용자가 없습니다.</p>
+            <p className="text-muted">{t('emptyList')}</p>
           </div>
         )}
 
@@ -126,7 +129,7 @@ export default function UsersPage() {
                     </div>
                     <div className="text-right">
                       <span className="rounded-full bg-subtle px-3 py-1 text-xs font-medium text-muted">
-                        {ROLE_LABEL[u.role]}
+                        {tEnum.has(`role.${u.role}`) ? tEnum(`role.${u.role as Role}`) : u.role}
                       </span>
                       <p className="mt-1 text-xs text-muted">{formatDateTime(u.createdAt)}</p>
                     </div>
@@ -137,7 +140,7 @@ export default function UsersPage() {
 
             <div className="mt-4 flex items-center justify-between text-sm text-muted">
               <span>
-                총 {result.total}건 · {result.page}/{totalPages} 페이지
+                {t('paginationSummary', { total: result.total, page: result.page, totalPages })}
               </span>
               <div className="flex gap-2">
                 <button
@@ -146,7 +149,7 @@ export default function UsersPage() {
                   disabled={page <= 1}
                   className="focusable rounded-2xl bg-card px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
                 >
-                  이전
+                  {t('prevPage')}
                 </button>
                 <button
                   type="button"
@@ -154,7 +157,7 @@ export default function UsersPage() {
                   disabled={page >= totalPages}
                   className="focusable rounded-2xl bg-card px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
                 >
-                  다음
+                  {t('nextPage')}
                 </button>
               </div>
             </div>
@@ -185,6 +188,8 @@ function UserForm({
   onSubmit: (values: AdminUserInput) => Promise<void>;
   onError: (msg: string) => void;
 }) {
+  const t = useTranslations('users');
+  const tEnum = useTranslations('enum');
   const fid = useId();
   const [values, setValues] = useState<FormValues>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
@@ -202,11 +207,11 @@ function UserForm({
     const department = values.department.trim();
 
     if (!email || !name || !department) {
-      onError('이메일·이름·부서는 필수입니다.');
+      onError(t('validationRequired'));
       return;
     }
     if (values.password.length < 8) {
-      onError('초기 비밀번호는 8자 이상이어야 합니다.');
+      onError(t('validationPassword'));
       return;
     }
 
@@ -225,7 +230,7 @@ function UserForm({
     <form onSubmit={submit} className="mt-4 space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1 space-y-2">
-          <label htmlFor={`${fid}-email`} className="block text-sm font-semibold">이메일</label>
+          <label htmlFor={`${fid}-email`} className="block text-sm font-semibold">{t('emailLabel')}</label>
           <input
             id={`${fid}-email`}
             className={inputClass}
@@ -236,11 +241,11 @@ function UserForm({
           />
         </div>
         <div className="flex-1 space-y-2">
-          <label htmlFor={`${fid}-name`} className="block text-sm font-semibold">이름</label>
+          <label htmlFor={`${fid}-name`} className="block text-sm font-semibold">{t('nameLabel')}</label>
           <input
             id={`${fid}-name`}
             className={inputClass}
-            placeholder="홍길동"
+            placeholder={t('namePlaceholder')}
             value={values.name}
             onChange={(e) => set('name', e.target.value)}
           />
@@ -249,17 +254,17 @@ function UserForm({
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1 space-y-2">
-          <label htmlFor={`${fid}-department`} className="block text-sm font-semibold">부서</label>
+          <label htmlFor={`${fid}-department`} className="block text-sm font-semibold">{t('departmentLabel')}</label>
           <input
             id={`${fid}-department`}
             className={inputClass}
-            placeholder="플랫폼팀"
+            placeholder={t('departmentPlaceholder')}
             value={values.department}
             onChange={(e) => set('department', e.target.value)}
           />
         </div>
         <div className="flex-1 space-y-2">
-          <label htmlFor={`${fid}-role`} className="block text-sm font-semibold">역할</label>
+          <label htmlFor={`${fid}-role`} className="block text-sm font-semibold">{t('roleLabel')}</label>
           <select
             id={`${fid}-role`}
             className={inputClass}
@@ -268,7 +273,7 @@ function UserForm({
           >
             {ROLE_OPTIONS.map((role) => (
               <option key={role} value={role}>
-                {ROLE_LABEL[role]}
+                {tEnum.has(`role.${role}`) ? tEnum(`role.${role as Role}`) : role}
               </option>
             ))}
           </select>
@@ -277,7 +282,7 @@ function UserForm({
 
       <div className="space-y-2">
         <label htmlFor={`${fid}-password`} className="block text-sm font-semibold">
-          초기 비밀번호 <span className="ml-1 font-normal text-muted">(8자 이상)</span>
+          {t('passwordLabel')} <span className="ml-1 font-normal text-muted">{t('passwordHint')}</span>
         </label>
         <input
           id={`${fid}-password`}
@@ -291,7 +296,7 @@ function UserForm({
       </div>
 
       <button type="submit" disabled={busy} className="btn-primary px-4 py-2.5 text-sm">
-        {busy ? '등록 중…' : '등록'}
+        {busy ? t('registering') : t('register')}
       </button>
     </form>
   );

@@ -362,5 +362,32 @@
     "recentTitle": "Recent change requests",
     "viewAll": "View all →",
     "emptyRecent": "No change requests yet."
+  },
+  "users": {
+    "loading": "Loading…",
+    "accessDenied": "Access denied",
+    "pageTitle": "User Management",
+    "pageDescription": "Register new users and check the full role list.",
+    "registerHeading": "Register user",
+    "listHeading": "User list",
+    "roleLabel": "Role",
+    "all": "All",
+    "searchAriaLabel": "Search by name or email",
+    "searchPlaceholder": "Search by name or email",
+    "emptyList": "No users registered.",
+    "paginationSummary": "{total} total · page {page}/{totalPages}",
+    "prevPage": "Previous",
+    "nextPage": "Next",
+    "validationRequired": "Email, name, and department are required.",
+    "validationPassword": "Initial password must be at least 8 characters.",
+    "emailLabel": "Email",
+    "nameLabel": "Name",
+    "namePlaceholder": "John Doe",
+    "departmentLabel": "Department",
+    "departmentPlaceholder": "e.g. Platform Team",
+    "passwordLabel": "Initial password",
+    "passwordHint": "(8+ characters)",
+    "registering": "Registering…",
+    "register": "Register"
   }
 }

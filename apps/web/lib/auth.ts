@@ -13,14 +13,15 @@ export type User = {
   role: Role;
 };
 
+// English fallback for consumers not yet on useTranslations('enum').role.* (see i18n Task 2 report).
 export const ROLE_LABEL: Record<Role, string> = {
-  DEVELOPER: '개발자',
-  REVIEWER: '검토자(DBA)',
-  APPROVER: '결재자',
-  ADMIN: '관리자',
+  DEVELOPER: 'Developer',
+  REVIEWER: 'Reviewer (DBA)',
+  APPROVER: 'Approver',
+  ADMIN: 'Admin',
 };
 
-/** localStorage에서 현재 사용자 읽기 (SSR-safe). */
+/** Read the current user from localStorage (SSR-safe). */
 export function readUser(): User | null {
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem('user');
@@ -39,10 +40,10 @@ export function logout() {
 }
 
 /**
- * 인증 가드 훅.
- * - 마운트 후 localStorage에서 사용자 확인
- * - 없으면 /login으로 교체 이동
- * - ready=false 동안 호출부는 로딩 UI를 렌더 (하이드레이션 불일치 방지)
+ * Auth guard hook.
+ * - After mount, checks the user in localStorage
+ * - If absent, replaces the route with /login
+ * - While ready=false, callers should render loading UI (avoids hydration mismatch)
  */
 export function useCurrentUser() {
   const router = useRouter();

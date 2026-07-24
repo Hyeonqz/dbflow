@@ -11,5 +11,46 @@
     "sqlReview": "SQL Review Policy",
     "approvalPolicy": "Approval Policy",
     "applySchedule": "Apply Window / Freeze"
+  },
+  "enum": {
+    "status": {
+      "DRAFT": "Draft",
+      "SUBMITTED": "Submitted",
+      "REVIEW_APPROVED": "Review approved",
+      "REVIEW_REJECTED": "Review rejected",
+      "FINAL_APPROVED": "Final approved",
+      "FINAL_REJECTED": "Final rejected",
+      "APPLIED": "Applied"
+    },
+    "role": {
+      "DEVELOPER": "Developer",
+      "REVIEWER": "Reviewer (DBA)",
+      "APPROVER": "Approver",
+      "ADMIN": "Admin"
+    },
+    "execution": {
+      "PENDING": "Pending",
+      "RUNNING": "Running",
+      "SUCCESS": "Success",
+      "FAILED": "Failed"
+    },
+    "diffKind": {
+      "CREATE_TABLE": "Create table",
+      "ADD_COLUMN": "Add column",
+      "DROP_COLUMN": "Drop column",
+      "MODIFY_COLUMN": "Modify column",
+      "ADD_INDEX": "Add index",
+      "DROP_INDEX": "Drop index",
+      "DROP_TABLE": "Drop table"
+    },
+    "backup": {
+      "SUCCESS": "Backed up",
+      "PARTIAL": "Partial backup",
+      "FAILED": "Backup failed"
+    },
+    "sqlType": {
+      "DDL": "DDL (structure)",
+      "DML": "DML (data)"
+    }
   }
 }

@@ -11,5 +11,46 @@
     "sqlReview": "SQL 리뷰 정책",
     "approvalPolicy": "결재 정책",
     "applySchedule": "작업창·동결"
+  },
+  "enum": {
+    "status": {
+      "DRAFT": "작성 중",
+      "SUBMITTED": "제출됨",
+      "REVIEW_APPROVED": "검토 승인",
+      "REVIEW_REJECTED": "검토 반려",
+      "FINAL_APPROVED": "최종 승인",
+      "FINAL_REJECTED": "최종 반려",
+      "APPLIED": "반영 완료"
+    },
+    "role": {
+      "DEVELOPER": "개발자",
+      "REVIEWER": "검토자(DBA)",
+      "APPROVER": "결재자",
+      "ADMIN": "관리자"
+    },
+    "execution": {
+      "PENDING": "대기",
+      "RUNNING": "실행 중",
+      "SUCCESS": "성공",
+      "FAILED": "실패"
+    },
+    "diffKind": {
+      "CREATE_TABLE": "테이블 생성",
+      "ADD_COLUMN": "컬럼 추가",
+      "DROP_COLUMN": "컬럼 삭제",
+      "MODIFY_COLUMN": "컬럼 변경",
+      "ADD_INDEX": "인덱스 추가",
+      "DROP_INDEX": "인덱스 삭제",
+      "DROP_TABLE": "테이블 삭제"
+    },
+    "backup": {
+      "SUCCESS": "백업 완료",
+      "PARTIAL": "부분 백업",
+      "FAILED": "백업 실패"
+    },
+    "sqlType": {
+      "DDL": "DDL (구조 변경)",
+      "DML": "DML (데이터 변경)"
+    }
   }
 }

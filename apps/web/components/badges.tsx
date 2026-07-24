@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
 import type {
   BackupStatus,
   ChangeRequestStatus,
@@ -8,14 +11,14 @@ import type {
   TargetEnv,
 } from '@/lib/api';
 
-const STATUS_STYLE: Record<ChangeRequestStatus, { label: string; className: string }> = {
-  DRAFT: { label: '작성 중', className: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' },
-  SUBMITTED: { label: '제출됨', className: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300' },
-  REVIEW_APPROVED: { label: '검토 승인', className: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300' },
-  REVIEW_REJECTED: { label: '검토 반려', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
-  FINAL_APPROVED: { label: '최종 승인', className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' },
-  FINAL_REJECTED: { label: '최종 반려', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
-  APPLIED: { label: '반영 완료', className: 'bg-emerald-600 text-white' },
+const STATUS_STYLE: Record<ChangeRequestStatus, string> = {
+  DRAFT: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300',
+  SUBMITTED: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300',
+  REVIEW_APPROVED: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
+  REVIEW_REJECTED: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+  FINAL_APPROVED: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
+  FINAL_REJECTED: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+  APPLIED: 'bg-emerald-600 text-white',
 };
 
 const ENV_STYLE: Record<TargetEnv, { label: string; className: string }> = {
@@ -24,26 +27,27 @@ const ENV_STYLE: Record<TargetEnv, { label: string; className: string }> = {
   PROD: { label: 'PROD', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
 };
 
+// English fallback; page consumers of this constant are out of Task 2 scope (see report).
 export const SQL_TYPE_LABEL: Record<SqlType, string> = {
-  DDL: 'DDL (구조 변경)',
-  DML: 'DML (데이터 변경)',
+  DDL: 'DDL (structure)',
+  DML: 'DML (data)',
 };
 
-const EXECUTION_STATUS_STYLE: Record<ExecutionStatus, { label: string; className: string }> = {
-  PENDING: { label: '대기', className: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' },
-  RUNNING: { label: '실행 중', className: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300' },
-  SUCCESS: { label: '성공', className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' },
-  FAILED: { label: '실패', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
+const EXECUTION_STATUS_STYLE: Record<ExecutionStatus, string> = {
+  PENDING: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300',
+  RUNNING: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300',
+  SUCCESS: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
+  FAILED: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300',
 };
 
-const DIFF_KIND_STYLE: Record<DiffKind, { label: string; className: string }> = {
-  CREATE_TABLE: { label: '테이블 생성', className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' },
-  ADD_COLUMN: { label: '컬럼 추가', className: 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300' },
-  DROP_COLUMN: { label: '컬럼 삭제', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
-  MODIFY_COLUMN: { label: '컬럼 변경', className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
-  ADD_INDEX: { label: '인덱스 추가', className: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300' },
-  DROP_INDEX: { label: '인덱스 삭제', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
-  DROP_TABLE: { label: '테이블 삭제', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
+const DIFF_KIND_STYLE: Record<DiffKind, string> = {
+  CREATE_TABLE: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
+  ADD_COLUMN: 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300',
+  DROP_COLUMN: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+  MODIFY_COLUMN: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  ADD_INDEX: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
+  DROP_INDEX: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+  DROP_TABLE: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300',
 };
 
 const LINT_SEVERITY_STYLE: Record<LintSeverity, { label: string; className: string }> = {
@@ -52,17 +56,19 @@ const LINT_SEVERITY_STYLE: Record<LintSeverity, { label: string; className: stri
   BLOCK: { label: 'BLOCK', className: 'bg-red-600 text-white' },
 };
 
-const BACKUP_STATUS_STYLE: Record<BackupStatus, { label: string; className: string }> = {
-  SUCCESS: { label: '백업 완료', className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' },
-  PARTIAL: { label: '부분 백업', className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
-  FAILED: { label: '백업 실패', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
+const BACKUP_STATUS_STYLE: Record<BackupStatus, string> = {
+  SUCCESS: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
+  PARTIAL: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  FAILED: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300',
 };
 
 const baseBadge = 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold';
 
 export function StatusBadge({ status }: { status: ChangeRequestStatus }) {
-  const s = STATUS_STYLE[status] ?? { label: status, className: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' };
-  return <span className={`${baseBadge} ${s.className}`}>{s.label}</span>;
+  const t = useTranslations('enum');
+  const className = STATUS_STYLE[status] ?? 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300';
+  const label = t.has(`status.${status}`) ? t(`status.${status}`) : status;
+  return <span className={`${baseBadge} ${className}`}>{label}</span>;
 }
 
 export function EnvBadge({ env }: { env: TargetEnv }) {
@@ -71,8 +77,10 @@ export function EnvBadge({ env }: { env: TargetEnv }) {
 }
 
 export function ExecutionStatusBadge({ status }: { status: ExecutionStatus }) {
-  const s = EXECUTION_STATUS_STYLE[status] ?? { label: status, className: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' };
-  return <span className={`${baseBadge} ${s.className}`}>{s.label}</span>;
+  const t = useTranslations('enum');
+  const className = EXECUTION_STATUS_STYLE[status] ?? 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300';
+  const label = t.has(`execution.${status}`) ? t(`execution.${status}`) : status;
+  return <span className={`${baseBadge} ${className}`}>{label}</span>;
 }
 
 export function LintSeverityBadge({ severity }: { severity: LintSeverity }) {
@@ -81,13 +89,17 @@ export function LintSeverityBadge({ severity }: { severity: LintSeverity }) {
 }
 
 export function BackupStatusBadge({ status }: { status: BackupStatus }) {
-  const s = BACKUP_STATUS_STYLE[status] ?? { label: status, className: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' };
-  return <span className={`${baseBadge} ${s.className}`}>{s.label}</span>;
+  const t = useTranslations('enum');
+  const className = BACKUP_STATUS_STYLE[status] ?? 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300';
+  const label = t.has(`backup.${status}`) ? t(`backup.${status}`) : status;
+  return <span className={`${baseBadge} ${className}`}>{label}</span>;
 }
 
 export function DiffKindBadge({ kind }: { kind: DiffKind }) {
-  const s = DIFF_KIND_STYLE[kind] ?? { label: kind, className: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' };
-  return <span className={`${baseBadge} ${s.className}`}>{s.label}</span>;
+  const t = useTranslations('enum');
+  const className = DIFF_KIND_STYLE[kind] ?? 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300';
+  const label = t.has(`diffKind.${kind}`) ? t(`diffKind.${kind}`) : kind;
+  return <span className={`${baseBadge} ${className}`}>{label}</span>;
 }
 
 export function SqlTypeBadge({ sqlType }: { sqlType: SqlType }) {

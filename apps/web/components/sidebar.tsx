@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { SVGProps } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ROLE_LABEL, logout, type Role, type User } from '@/lib/auth';
+import { logout, type Role, type User } from '@/lib/auth';
 import { ThemeToggle } from '@/components/theme';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { CalendarIcon, ChevronIcon, ClipboardIcon, DatabaseIcon, DiffIcon, HomeIcon, ShieldCheckIcon, ShieldIcon, UsersCheckIcon, UsersIcon, UserSwitchIcon } from '@/components/icons';
@@ -50,6 +50,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const t = useTranslations('nav');
+  const tEnum = useTranslations('enum');
   const items = NAV.filter((it) => !it.roles || it.roles.includes(user.role));
 
   return (
@@ -108,7 +109,7 @@ export function Sidebar({
               <span className="font-semibold text-ink">{user.name}</span>{' '}
               <span className="text-muted">| {user.department}</span>
             </p>
-            <p className="text-xs text-muted">{ROLE_LABEL[user.role]}</p>
+            <p className="text-xs text-muted">{tEnum(`role.${user.role}`)}</p>
           </div>
           <button
             type="button"

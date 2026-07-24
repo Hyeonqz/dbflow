@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useCurrentUser, type User } from '@/lib/auth';
 import {
   applyChangeRequest,
@@ -42,12 +42,13 @@ import { formatDateTime, formatKstDateTime } from '@/lib/format';
 import { PageHeader } from '@/components/page-header';
 import type { Locale } from '@/i18n/config';
 
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 const fmtMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 export default function ChangeRequestDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const locale = useLocale() as Locale;
+  const t = useTranslations('changeRequestDetail');
   const { user, ready } = useCurrentUser();
   const [cr, setCr] = useState<ChangeRequestDetail | null>(null);
   const [executions, setExecutions] = useState<Execution[] | null>(null);
@@ -80,7 +81,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
   }, [ready, load, loadExecutions, loadBackups]);
 
   if (!ready || !user) {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{t('loading')}</p>;
   }
 
   return (
@@ -91,7 +92,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
         </p>
       )}
 
-      {!error && !cr && <p className="text-muted">불러오는 중…</p>}
+      {!error && !cr && <p className="text-muted">{t('loading')}</p>}
 
       {cr && (
         <>
@@ -102,18 +103,20 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
             <span aria-hidden>·</span>
             <span>{formatDateTime(cr.createdAt, locale)}</span>
             <span aria-hidden>·</span>
-            <span>검토자 {cr.reviewerName ?? '미지정'}</span>
+            <span>{t('reviewerLabel', { name: cr.reviewerName ?? t('unassigned') })}</span>
             <span aria-hidden>·</span>
             <span>
-              결재자{' '}
-              {cr.approvers.length === 0
-                ? '미지정'
-                : cr.approvers.map((a) => a.name ?? '이름 없음').join(', ')}
+              {t('approverLabel', {
+                names:
+                  cr.approvers.length === 0
+                    ? t('unassigned')
+                    : cr.approvers.map((a) => a.name ?? t('noName')).join(', '),
+              })}
             </span>
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* 왼쪽: 설명 + SQL 파일 */}
+            {/* Left: description + SQL files */}
             <div className="space-y-6">
               {cr.description && (
                 <p className="whitespace-pre-wrap rounded-2xl bg-card p-5 text-sm leading-relaxed text-ink ring-1 ring-border">
@@ -122,7 +125,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
               )}
 
               <section>
-                <h2 className="text-base font-semibold text-ink">SQL 파일 ({cr.files.length})</h2>
+                <h2 className="text-base font-semibold text-ink">{t('sqlFiles', { count: cr.files.length })}</h2>
                 <div className="mt-3 space-y-4">
                   {cr.files.map((file, idx) => (
                     <article key={`${file.filename}-${idx}`} className="overflow-hidden rounded-2xl ring-1 ring-border">
@@ -139,7 +142,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
               </section>
             </div>
 
-            {/* 오른쪽: 액션 + 적용 + 이력 + 상태 히스토리 */}
+            {/* Right: actions + apply + history + status history */}
             <div className="flex flex-col gap-6">
               <AssigneePanel cr={cr} user={user} onError={setError} onDone={load} />
 
@@ -172,10 +175,10 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
               />
 
               <section>
-                <h2 className="text-base font-semibold text-ink">상태 히스토리</h2>
+                <h2 className="text-base font-semibold text-ink">{t('statusHistory')}</h2>
                 <ol className="mt-4 space-y-4">
                   {cr.statusHistory.length === 0 && (
-                    <li className="text-sm text-muted">기록이 없습니다.</li>
+                    <li className="text-sm text-muted">{t('noHistory')}</li>
                   )}
                   {cr.statusHistory.map((h, idx) => (
                     <li key={idx} className="relative pl-6">
@@ -205,7 +208,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 }
 
 // ---------------------------------------------------------------------------
-// 역할/상태에 따라 가능한 액션만 노출
+// Expose only the actions available for the current role/status
 // ---------------------------------------------------------------------------
 function ActionPanel({
   cr,
@@ -218,6 +221,7 @@ function ActionPanel({
   onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
+  const t = useTranslations('changeRequestDetail');
   const role = user.role;
   const canSubmit = role === 'DEVELOPER' && cr.status === 'DRAFT';
   const canReview = role === 'REVIEWER' && cr.status === 'SUBMITTED';
@@ -238,8 +242,8 @@ function ActionPanel({
       )}
       {canReview && (
         <DecisionAction
-          title="검토 (1차)"
-          badge={isReviewDelegate ? <DelegateBadge label="위임 검토" /> : null}
+          title={t('reviewTitle')}
+          badge={isReviewDelegate ? <DelegateBadge label={t('delegateReview')} /> : null}
           run={(decision, comment) => reviewChangeRequest(cr.id, decision, comment)}
           onError={onError}
           onDone={onDone}
@@ -247,8 +251,8 @@ function ActionPanel({
       )}
       {canApprove && (
         <DecisionAction
-          title="최종 결재"
-          badge={isApproveDelegate ? <DelegateBadge label="위임 결재" /> : null}
+          title={t('finalApprovalTitle')}
+          badge={isApproveDelegate ? <DelegateBadge label={t('delegateApproval')} /> : null}
           run={(decision, comment) => approveChangeRequest(cr.id, decision, comment)}
           onError={onError}
           onDone={onDone}
@@ -256,7 +260,7 @@ function ActionPanel({
       )}
       {myDecisionMade && myApprover && (
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">최종 결재</h2>
+          <h2 className="text-sm font-semibold">{t('finalApprovalTitle')}</h2>
           <ApproverDecisionBadge decision={myApprover.decision} />
         </div>
       )}
@@ -265,7 +269,7 @@ function ActionPanel({
 }
 
 // ---------------------------------------------------------------------------
-// 결재 진행 — 결재자별 승인/반려/대기 상태와 전체 진행률(approved/required)
+// Approval progress — per-approver approve/reject/pending status and overall progress (approved/required)
 // ---------------------------------------------------------------------------
 function DelegateBadge({ label }: { label: string }) {
   return (
@@ -276,28 +280,30 @@ function DelegateBadge({ label }: { label: string }) {
 }
 
 function ApproverDecisionBadge({ decision }: { decision: 'APPROVE' | 'REJECT' | null }) {
+  const t = useTranslations('changeRequestDetail');
   if (decision === 'APPROVE') {
     return (
       <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
-        승인
+        {t('approve')}
       </span>
     );
   }
   if (decision === 'REJECT') {
     return (
       <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 dark:bg-red-500/15 dark:text-red-300">
-        반려
+        {t('reject')}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:bg-white/10 dark:text-gray-300">
-      대기
+      {t('pending')}
     </span>
   );
 }
 
 function ApprovalProgressPanel({ cr }: { cr: ChangeRequestDetail }) {
+  const t = useTranslations('changeRequestDetail');
   if (cr.approvers.length === 0) return null;
   const approved = cr.approvers.filter((a) => a.decision === 'APPROVE').length;
   const required = cr.approvers.length;
@@ -305,9 +311,9 @@ function ApprovalProgressPanel({ cr }: { cr: ChangeRequestDetail }) {
   return (
     <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">결재 진행</h2>
+        <h2 className="text-sm font-semibold">{t('approvalProgress')}</h2>
         <span className="text-xs font-medium text-muted">
-          {approved}/{required} 승인
+          {t('approvalCount', { approved, required })}
         </span>
       </div>
       <ul className="mt-3 space-y-2">
@@ -315,8 +321,8 @@ function ApprovalProgressPanel({ cr }: { cr: ChangeRequestDetail }) {
           <li key={a.userId} className="flex items-center justify-between gap-3 text-sm">
             <span className="text-ink">
               {a.decidedBy && a.decidedBy !== a.name
-                ? `${a.name ?? '이름 없음'} — ${a.decidedBy} 대리 결재`
-                : (a.name ?? '이름 없음')}
+                ? t('delegatedApprovalBy', { name: a.name ?? t('noName'), decidedBy: a.decidedBy })
+                : (a.name ?? t('noName'))}
               {a.department && <span className="text-muted"> ({a.department})</span>}
             </span>
             <ApproverDecisionBadge decision={a.decision} />
@@ -328,7 +334,7 @@ function ApprovalProgressPanel({ cr }: { cr: ChangeRequestDetail }) {
 }
 
 // ---------------------------------------------------------------------------
-// 지정자(검토자/결재자) 표시 + 재지정 — DRAFT 상태의 작성자 또는 ADMIN만 변경 가능
+// Assignee (reviewer/approver) display + reassignment — only the DRAFT author or ADMIN can change
 // ---------------------------------------------------------------------------
 function AssigneePanel({
   cr,
@@ -341,6 +347,7 @@ function AssigneePanel({
   onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
+  const t = useTranslations('changeRequestDetail');
   const canReassign = (cr.status === 'DRAFT' && user.id === cr.authorId) || user.role === 'ADMIN';
 
   const [reviewers, setReviewers] = useState<UserSummary[]>([]);
@@ -365,13 +372,15 @@ function AssigneePanel({
   if (!canReassign) {
     return (
       <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
-        <h2 className="text-sm font-semibold">지정자</h2>
-        <p className="mt-2 text-sm text-muted">검토자 {cr.reviewerName ?? '미지정'}</p>
+        <h2 className="text-sm font-semibold">{t('assignees')}</h2>
+        <p className="mt-2 text-sm text-muted">{t('reviewerLabel', { name: cr.reviewerName ?? t('unassigned') })}</p>
         <p className="mt-1 text-sm text-muted">
-          결재자{' '}
-          {cr.approvers.length === 0
-            ? '미지정'
-            : cr.approvers.map((a) => a.name ?? '이름 없음').join(', ')}
+          {t('approverLabel', {
+            names:
+              cr.approvers.length === 0
+                ? t('unassigned')
+                : cr.approvers.map((a) => a.name ?? t('noName')).join(', '),
+          })}
         </p>
       </section>
     );
@@ -399,15 +408,15 @@ function AssigneePanel({
 
   return (
     <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
-      <h2 className="text-sm font-semibold">지정자</h2>
+      <h2 className="text-sm font-semibold">{t('assignees')}</h2>
       <div className="mt-3 flex flex-col gap-3 sm:flex-row">
         <select
-          aria-label="검토자"
+          aria-label={t('reviewer')}
           className="w-full rounded-2xl bg-subtle px-4 py-3 outline-none ring-1 ring-border-strong focus:ring-primary sm:flex-1"
           value={reviewerId}
           onChange={(e) => setReviewerId(e.target.value)}
         >
-          <option value="">검토자 미지정</option>
+          <option value="">{t('reviewerUnassignedOption')}</option>
           {reviewers.map((r) => (
             <option key={r.id} value={r.id}>
               {r.name} ({r.department})
@@ -418,12 +427,12 @@ function AssigneePanel({
           {approverIds.map((selectedId, idx) => (
             <select
               key={idx}
-              aria-label={`결재자 ${idx + 1}`}
+              aria-label={t('approverAriaLabel', { n: idx + 1 })}
               className="w-full rounded-2xl bg-subtle px-4 py-3 outline-none ring-1 ring-border-strong focus:ring-primary"
               value={selectedId}
               onChange={(e) => updateApproverId(idx, e.target.value)}
             >
-              <option value="">결재자 미지정</option>
+              <option value="">{t('approverUnassignedOption')}</option>
               {approvers
                 .filter((a) => a.id === selectedId || !approverIds.includes(a.id))
                 .map((a) => (
@@ -437,7 +446,7 @@ function AssigneePanel({
       </div>
       <div className="mt-3 flex justify-end">
         <button onClick={reassign} disabled={busy} className="btn-primary px-5 py-2.5 text-sm">
-          {busy ? '변경 중…' : '지정 변경'}
+          {busy ? t('changing') : t('changeAssignment')}
         </button>
       </div>
     </section>
@@ -453,6 +462,7 @@ function SubmitAction({
   onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
+  const t = useTranslations('changeRequestDetail');
   const [busy, setBusy] = useState(false);
   async function submit() {
     setBusy(true);
@@ -468,9 +478,9 @@ function SubmitAction({
   }
   return (
     <div className="flex items-center justify-between gap-3">
-      <p className="text-sm text-muted">검토자에게 제출하면 더 이상 수정할 수 없습니다.</p>
+      <p className="text-sm text-muted">{t('submitNotice')}</p>
       <button onClick={submit} disabled={busy} className="btn-primary shrink-0 px-5 py-2.5 text-sm">
-        {busy ? '제출 중…' : '검토 요청'}
+        {busy ? t('submitting') : t('requestReview')}
       </button>
     </div>
   );
@@ -489,13 +499,14 @@ function DecisionAction({
   onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
+  const t = useTranslations('changeRequestDetail');
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState<ReviewDecision | null>(null);
 
   async function act(decision: ReviewDecision) {
     onError('');
     if (decision === 'REJECT' && !comment.trim()) {
-      onError('반려 시 사유를 입력해 주세요.');
+      onError(t('rejectReasonRequired'));
       return;
     }
     setBusy(decision);
@@ -517,9 +528,9 @@ function DecisionAction({
         {badge}
       </div>
       <textarea
-        aria-label="검토 의견"
+        aria-label={t('reviewCommentAriaLabel')}
         className="mt-3 w-full resize-y rounded-2xl bg-subtle px-4 py-3 text-sm outline-none ring-1 ring-border-strong focus:ring-primary"
-        placeholder="의견 (반려 시 필수)"
+        placeholder={t('commentPlaceholder')}
         value={comment}
         onChange={(e) => setComment(e.target.value)}
       />
@@ -529,14 +540,14 @@ function DecisionAction({
           disabled={busy !== null}
           className="btn-primary flex-1 px-4 py-2.5 text-sm"
         >
-          {busy === 'APPROVE' ? '처리 중…' : '승인'}
+          {busy === 'APPROVE' ? t('processing') : t('approve')}
         </button>
         <button
           onClick={() => act('REJECT')}
           disabled={busy !== null}
           className="focusable flex-1 rounded-2xl bg-card px-4 py-2.5 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:ring-red-500/30 dark:hover:bg-red-500/15"
         >
-          {busy === 'REJECT' ? '처리 중…' : '반려'}
+          {busy === 'REJECT' ? t('processing') : t('reject')}
         </button>
       </div>
     </div>
@@ -544,14 +555,14 @@ function DecisionAction({
 }
 
 // ---------------------------------------------------------------------------
-// 적용(Apply) — 환경별 권한·승인 게이트 정책 반영
-//   · 권한: DEV는 해당 CR author(개발자) 또는 결재자, STAGING|PROD는 결재자만
-//   · 게이트: DEV는 조기 허용(반려/적용완료 제외), STAGING|PROD는 FINAL_APPROVED 필수
+// Apply — reflects per-environment permission/approval gate policy
+//   · Permission: DEV allows the CR author (developer) or an approver, STAGING|PROD require an approver
+//   · Gate: DEV allows early apply (except rejected/already-applied), STAGING|PROD require FINAL_APPROVED
 // ---------------------------------------------------------------------------
-const ENV_POLICY_NOTE: Record<TargetEnv, string> = {
-  DEV: 'DEV는 최종 승인 전에도 적용할 수 있습니다(빠른 반복). 반려·적용 완료 상태에서는 적용할 수 없습니다.',
-  STAGING: 'STAGING은 최종 승인(FINAL_APPROVED)된 변경 요청만 적용할 수 있습니다.',
-  PROD: 'PROD는 최종 승인(FINAL_APPROVED)된 변경 요청만 적용할 수 있습니다.',
+const ENV_POLICY_KEY: Record<TargetEnv, string> = {
+  DEV: 'envPolicyDev',
+  STAGING: 'envPolicyStaging',
+  PROD: 'envPolicyProd',
 };
 
 function applyRoleAllowed(cr: ChangeRequestDetail, user: User): boolean {
@@ -561,16 +572,16 @@ function applyRoleAllowed(cr: ChangeRequestDetail, user: User): boolean {
   return user.role === 'APPROVER';
 }
 
-function applyStatusGate(cr: ChangeRequestDetail): { allowed: boolean; reason?: string } {
+function applyStatusGate(cr: ChangeRequestDetail): { allowed: boolean; reasonKey?: string } {
   if (cr.targetEnv === 'DEV') {
     const blocked: ChangeRequestDetail['status'][] = ['REVIEW_REJECTED', 'FINAL_REJECTED', 'APPLIED'];
     if (blocked.includes(cr.status)) {
-      return { allowed: false, reason: '반려되었거나 이미 적용 완료된 요청은 적용할 수 없습니다.' };
+      return { allowed: false, reasonKey: 'gateBlockedDev' };
     }
     return { allowed: true };
   }
   if (cr.status !== 'FINAL_APPROVED') {
-    return { allowed: false, reason: '최종 승인(FINAL_APPROVED) 후에 적용할 수 있습니다.' };
+    return { allowed: false, reasonKey: 'gateNotFinalApproved' };
   }
   return { allowed: true };
 }
@@ -587,6 +598,7 @@ function ApplyPanel({
   onApplied: () => Promise<unknown>;
 }) {
   const locale = useLocale() as Locale;
+  const t = useTranslations('changeRequestDetail');
   const [dbs, setDbs] = useState<TargetDatabase[] | null>(null);
   const [dbNotice, setDbNotice] = useState('');
   const [selectedId, setSelectedId] = useState('');
@@ -615,9 +627,9 @@ function ApplyPanel({
       .catch((err: unknown) => {
         if (!active) return;
         setDbs([]);
-        // 개발자는 DEV 환경 대상 DB만 조회 가능. 권한 밖이면 안내만 노출.
+        // Developers can only view target DBs for the DEV environment; show a notice if out of permission.
         if (err instanceof ApiError && err.status === 403) {
-          setDbNotice('대상 DB 목록을 조회할 권한이 없습니다.');
+          setDbNotice(t('dbNoticeForbidden'));
         } else {
           setDbNotice((err as Error).message);
         }
@@ -688,10 +700,10 @@ function ApplyPanel({
 
   return (
     <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
-      <h2 className="text-sm font-semibold">적용</h2>
-      <p className="mt-1 text-sm text-muted">{ENV_POLICY_NOTE[cr.targetEnv]}</p>
+      <h2 className="text-sm font-semibold">{t('applyTitle')}</h2>
+      <p className="mt-1 text-sm text-muted">{t(ENV_POLICY_KEY[cr.targetEnv])}</p>
 
-      {/* (A) 위험 SQL 린트 결과 */}
+      {/* (A) Risky SQL lint results */}
       {lint && lint.items.length > 0 && (
         <div
           className={`mt-4 rounded-2xl p-4 ring-1 ${
@@ -701,12 +713,12 @@ function ApplyPanel({
           }`}
         >
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-ink">린트 검사</span>
+            <span className="text-sm font-semibold text-ink">{t('lintCheck')}</span>
             <LintSeverityBadge severity={lint.maxSeverity} />
           </div>
           {lintBlocked && (
             <p className="mt-2 text-sm font-medium text-red-600 dark:text-red-300">
-              BLOCK 위험이 있어 {cr.targetEnv} 환경에는 적용할 수 없습니다. SQL을 수정해 주세요.
+              {t('lintBlockedMessage', { env: cr.targetEnv })}
             </p>
           )}
           <ul className="mt-3 space-y-2">
@@ -726,9 +738,9 @@ function ApplyPanel({
         </div>
       )}
 
-      {!gate.allowed && (
+      {!gate.allowed && gate.reasonKey && (
         <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-          {gate.reason}
+          {t(gate.reasonKey)}
         </p>
       )}
 
@@ -740,7 +752,7 @@ function ApplyPanel({
 
       {gate.allowed && dbs !== null && matching.length === 0 && !dbNotice && (
         <p className="mt-3 rounded-2xl bg-subtle px-4 py-3 text-sm text-muted">
-          {cr.targetEnv} 환경에 등록된 대상 DB가 없습니다. 먼저 대상 DB를 등록해 주세요.
+          {t('noTargetDb', { env: cr.targetEnv })}
         </p>
       )}
 
@@ -748,23 +760,32 @@ function ApplyPanel({
         <>
           {schedule && !schedule.allowed && schedule.reason === 'FROZEN' && (
             <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-500">
-              🧊 동결 중: {schedule.freeze?.reason} ({formatKstDateTime(schedule.freeze!.endsAt, locale)}까지)
+              {'🧊 '}
+              {t('freezeActive', {
+                reason: schedule.freeze?.reason ?? '',
+                until: formatKstDateTime(schedule.freeze!.endsAt, locale),
+              })}
             </div>
           )}
           {schedule && !schedule.allowed && schedule.reason === 'OUT_OF_WINDOW' && (
             <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
-              적용 작업창이 아닙니다{schedule.nextWindow
-                ? ` — 다음: ${DAY_LABELS[schedule.nextWindow.dayOfWeek]} ${fmtMin(schedule.nextWindow.startMinute)}~${fmtMin(schedule.nextWindow.endMinute)}`
+              {t('outOfWindow')}
+              {schedule.nextWindow
+                ? t('nextWindowSuffix', {
+                    day: t(`day.${DAY_KEYS[schedule.nextWindow.dayOfWeek]}`),
+                    start: fmtMin(schedule.nextWindow.startMinute),
+                    end: fmtMin(schedule.nextWindow.endMinute),
+                  })
                 : ''}
             </div>
           )}
           {schedule?.allowed && (
-            <p className="mt-3 text-sm text-emerald-500">지금 적용 가능한 시간대입니다.</p>
+            <p className="mt-3 text-sm text-emerald-500">{t('windowOpen')}</p>
           )}
 
           <div className="mt-4 space-y-2">
             <label htmlFor="apply-db" className="block text-sm font-medium text-muted">
-              대상 DB ({cr.targetEnv})
+              {t('targetDbLabel', { env: cr.targetEnv })}
             </label>
             <select
               id="apply-db"
@@ -775,7 +796,7 @@ function ApplyPanel({
                 setDryRun(null);
               }}
             >
-              <option value="">선택하세요</option>
+              <option value="">{t('selectPlaceholder')}</option>
               {matching.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name} — {d.host}:{d.port}/{d.database}
@@ -784,7 +805,7 @@ function ApplyPanel({
             </select>
           </div>
 
-          {/* (B) Dry-run 미리보기 */}
+          {/* (B) Dry-run preview */}
           <DryRunSection
             result={dryRun}
             running={dryRunning}
@@ -794,7 +815,7 @@ function ApplyPanel({
 
           <div className="mt-4 flex items-center justify-end gap-3">
             <button onClick={apply} disabled={!canApply} className="btn-primary px-6 py-3 text-sm">
-              {busy ? '적용 중…' : '적용'}
+              {busy ? t('applying') : t('applyTitle')}
             </button>
           </div>
         </>
@@ -808,16 +829,14 @@ function ApplyPanel({
               : 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300'
           }`}
         >
-          {result.status === 'SUCCESS'
-            ? '적용이 완료되었습니다. 아래 적용 이력에서 상세를 확인하세요.'
-            : '적용이 실패했습니다. 아래 적용 이력에서 중단 지점을 확인하세요. (상태는 유지되어 재시도 가능)'}
+          {result.status === 'SUCCESS' ? t('applySuccess') : t('applyFailure')}
         </p>
       )}
     </section>
   );
 }
 
-// 적용 전 영향 미리보기(Dry-run): DML은 affectedRows, DDL은 정적 분류
+// Impact preview before apply (dry-run): DML shows affectedRows, DDL is statically classified
 function DryRunSection({
   result,
   running,
@@ -829,26 +848,27 @@ function DryRunSection({
   disabled: boolean;
   onRun: () => void;
 }) {
+  const t = useTranslations('changeRequestDetail');
   return (
     <div className="mt-4 rounded-2xl bg-subtle p-4 ring-1 ring-border">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <span className="text-sm font-semibold text-ink">Dry-run 미리보기</span>
-          <p className="text-xs text-muted">실제로 커밋하지 않고 영향 범위만 확인합니다.</p>
+          <span className="text-sm font-semibold text-ink">{t('dryRunPreview')}</span>
+          <p className="text-xs text-muted">{t('dryRunDesc')}</p>
         </div>
         <button
           onClick={onRun}
           disabled={disabled}
           className="focusable shrink-0 rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
         >
-          {running ? '확인 중…' : 'Dry-run 실행'}
+          {running ? t('checking') : t('runDryRun')}
         </button>
       </div>
 
       {result && (
         <ul className="mt-3 space-y-2">
           {result.perFile.length === 0 && (
-            <li className="text-sm text-muted">영향 분석 결과가 없습니다.</li>
+            <li className="text-sm text-muted">{t('noImpactResult')}</li>
           )}
           {result.perFile.map((f, idx) => (
             <li
@@ -860,7 +880,7 @@ function DryRunSection({
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-xs text-ink">{f.filename}</span>
                 <span className="text-xs font-medium text-muted">
-                  {f.mode === 'DML_TX_ROLLBACK' ? 'DML(롤백측정)' : 'DDL(정적)'}
+                  {f.mode === 'DML_TX_ROLLBACK' ? t('dmlMode') : t('ddlMode')}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -869,7 +889,7 @@ function DryRunSection({
                   <span className="tabular-nums text-ink">{f.affectedRows} rows</span>
                 )}
                 {f.destructive && (
-                  <span className="font-semibold text-red-600 dark:text-red-300">파괴적</span>
+                  <span className="font-semibold text-red-600 dark:text-red-300">{t('destructive')}</span>
                 )}
               </div>
             </li>
@@ -881,9 +901,9 @@ function DryRunSection({
 }
 
 // ---------------------------------------------------------------------------
-// 적용 실행 로그/결과 — Execution + ExecutionStep 타임라인 (+ 백업 상태 / 롤백)
+// Apply execution log/results — Execution + ExecutionStep timeline (+ backup status / rollback)
 // ---------------------------------------------------------------------------
-/** 백업이 롤백으로 데이터 복구 가능한지: 실패 백업은 불가, schema-only는 데이터 복구 불가. */
+/** Whether a backup can restore data via rollback: not for failed backups; schema-only backups can't restore data. */
 function isBackupRestorable(backup: Backup | undefined): boolean {
   if (!backup) return false;
   return backup.status !== 'FAILED';
@@ -902,13 +922,14 @@ function ExecutionHistory({
   onError: (msg: string) => void;
   onRolledBack: () => Promise<unknown>;
 }) {
+  const t = useTranslations('changeRequestDetail');
   if (executions === null || executions.length === 0) return null;
 
   const backupsById = new Map(backups.map((b) => [b.id, b]));
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-ink">적용 이력 ({executions.length})</h2>
+      <h2 className="text-base font-semibold text-ink">{t('applyHistory', { count: executions.length })}</h2>
       <div className="mt-3 space-y-4">
         {executions.map((exec) => (
           <ExecutionCard
@@ -939,14 +960,15 @@ function ExecutionCard({
   onRolledBack: () => Promise<unknown>;
 }) {
   const locale = useLocale() as Locale;
+  const t = useTranslations('changeRequestDetail');
   const [rollingBack, setRollingBack] = useState(false);
   const isApply = (exec.kind ?? 'APPLY') === 'APPLY';
   const restorable = isBackupRestorable(backup);
-  // 롤백 노출 조건: APPLY 실행 + 복구 가능한 백업 + 권한
+  // Rollback exposure condition: APPLY execution + restorable backup + permission
   const showRollback = isApply && restorable && canRollback;
 
   async function rollback() {
-    if (!window.confirm('이 적용을 백업 기준으로 롤백할까요? 구조(DDL) 변경은 되돌리지 않습니다.')) {
+    if (!window.confirm(t('rollbackConfirm'))) {
       return;
     }
     setRollingBack(true);
@@ -966,7 +988,7 @@ function ExecutionCard({
         <div className="flex items-center gap-2">
           {!isApply && (
             <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
-              롤백
+              {t('rollback')}
             </span>
           )}
           <ExecutionStatusBadge status={exec.status} />
@@ -979,16 +1001,16 @@ function ExecutionCard({
         </span>
       </div>
 
-      {/* 백업 상태 (적용 실행에만) */}
+      {/* Backup status (apply executions only) */}
       {isApply && backup && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-card px-4 py-2 text-xs">
           <BackupStatusBadge status={backup.status} />
           <span className="text-muted">
-            {backup.scope === 'SCHEMA_AND_DATA' ? '스키마+데이터' : '스키마 전용'}
+            {backup.scope === 'SCHEMA_AND_DATA' ? t('schemaAndData') : t('schemaOnly')}
           </span>
           <span className="text-muted">{formatBytes(backup.sizeBytes)}</span>
           <span className={restorable ? 'text-emerald-600 dark:text-emerald-300' : 'text-muted'}>
-            {restorable ? '복구 가능' : '복구 불가'}
+            {restorable ? t('restorableYes') : t('restorableNo')}
           </span>
           {backup.note && <span className="text-amber-700 dark:text-amber-300">· {backup.note}</span>}
         </div>
@@ -996,7 +1018,7 @@ function ExecutionCard({
 
       <ol className="divide-y divide-border bg-card">
         {exec.steps.length === 0 && (
-          <li className="px-4 py-3 text-sm text-muted">실행된 단계가 없습니다.</li>
+          <li className="px-4 py-3 text-sm text-muted">{t('noSteps')}</li>
         )}
         {exec.steps.map((step) => (
           <li key={step.id} className="px-4 py-3">
@@ -1020,14 +1042,14 @@ function ExecutionCard({
       {showRollback && (
         <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3">
           <p className="text-xs text-muted">
-            백업 스냅샷 기준으로 데이터를 되돌립니다. DDL 구조 변경은 수동 대응이 필요합니다.
+            {t('rollbackDesc')}
           </p>
           <button
             onClick={rollback}
             disabled={rollingBack}
             className="focusable shrink-0 rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:ring-red-500/30 dark:hover:bg-red-500/15"
           >
-            {rollingBack ? '롤백 중…' : '롤백'}
+            {rollingBack ? t('rollingBack') : t('rollback')}
           </button>
         </div>
       )}

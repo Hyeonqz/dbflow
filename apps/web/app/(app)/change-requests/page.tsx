@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { type Role } from '@/lib/auth';
 import { useUser } from '@/components/user-context';
 import { listChangeRequests, type ChangeRequestStatus, type ChangeRequestSummary } from '@/lib/api';
@@ -12,16 +13,18 @@ import { PageHeader } from '@/components/page-header';
 
 type FilterKey = 'ALL' | 'REVIEW_PENDING' | 'APPROVE_PENDING' | 'REJECTED' | 'DONE';
 
-const FILTERS: { key: FilterKey; label: string; match: (s: ChangeRequestStatus) => boolean }[] = [
-  { key: 'ALL', label: '전체', match: () => true },
-  { key: 'REVIEW_PENDING', label: '검토 대기', match: (s) => s === 'SUBMITTED' },
-  { key: 'APPROVE_PENDING', label: '결재 대기', match: (s) => s === 'REVIEW_APPROVED' },
+type FilterDef = { key: FilterKey; labelKey: string; match: (s: ChangeRequestStatus) => boolean };
+
+const FILTERS: FilterDef[] = [
+  { key: 'ALL', labelKey: 'filterAll', match: () => true },
+  { key: 'REVIEW_PENDING', labelKey: 'filterReviewPending', match: (s) => s === 'SUBMITTED' },
+  { key: 'APPROVE_PENDING', labelKey: 'filterApprovePending', match: (s) => s === 'REVIEW_APPROVED' },
   {
     key: 'REJECTED',
-    label: '반려',
+    labelKey: 'filterRejected',
     match: (s) => s === 'REVIEW_REJECTED' || s === 'FINAL_REJECTED',
   },
-  { key: 'DONE', label: '완료', match: (s) => s === 'FINAL_APPROVED' || s === 'APPLIED' },
+  { key: 'DONE', labelKey: 'filterDone', match: (s) => s === 'FINAL_APPROVED' || s === 'APPLIED' },
 ];
 
 // ADMIN은 컴포넌트 상단 가드에서 리다이렉트되어 이 맵에 절대 접근하지 않는다.
@@ -39,6 +42,8 @@ function filtersForRole(_role: Role) {
 export default function ChangeRequestListPage() {
   const { user, ready } = useUser();
   const router = useRouter();
+  const t = useTranslations('changeRequests');
+  const tCommon = useTranslations('common');
   const [items, setItems] = useState<ChangeRequestSummary[] | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<FilterKey>('ALL');
@@ -75,7 +80,7 @@ export default function ChangeRequestListPage() {
   }, [items, filter]);
 
   if (!ready || !user || user.role === 'ADMIN') {
-    return <p className="text-muted">불러오는 중…</p>;
+    return <p className="text-muted">{tCommon('loading')}</p>;
   }
 
   const filters = filtersForRole(user.role);
@@ -83,18 +88,18 @@ export default function ChangeRequestListPage() {
   return (
     <>
       <PageHeader
-        title="변경 요청"
+        title={t('listTitle')}
         action={
           user.role === 'DEVELOPER' && (
             <Link href="/change-requests/new" className="btn-primary inline-flex px-4 py-2.5 text-sm">
-              새 변경 요청
+              {t('newTitle')}
             </Link>
           )
         }
       />
 
       {/* 상태 필터 — 탭이 아닌 토글 버튼 그룹(선택이 화면을 전환하지 않고 목록을 걸러냄). */}
-      <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="상태 필터">
+      <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label={t('statusFilterAriaLabel')}>
         {filters.map((f) => {
           const selected = f.key === filter;
           return (
@@ -109,7 +114,7 @@ export default function ChangeRequestListPage() {
                   : 'bg-card text-muted ring-1 ring-border-strong hover:text-ink'
               }`}
             >
-              {f.label}
+              {t(f.labelKey)}
             </button>
           );
         })}
@@ -122,11 +127,11 @@ export default function ChangeRequestListPage() {
           </p>
         )}
 
-        {!error && items === null && <p className="text-muted">불러오는 중…</p>}
+        {!error && items === null && <p className="text-muted">{tCommon('loading')}</p>}
 
         {!error && items !== null && visible.length === 0 && (
           <div className="rounded-2xl bg-card px-6 py-12 text-center ring-1 ring-border">
-            <p className="text-muted">해당하는 변경 요청이 없습니다.</p>
+            <p className="text-muted">{t('emptyList')}</p>
           </div>
         )}
 
@@ -137,11 +142,11 @@ export default function ChangeRequestListPage() {
               <table className="w-full min-w-[640px] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-xs font-semibold text-muted">
-                    <th className="px-4 py-3">제목</th>
-                    <th className="px-4 py-3">환경</th>
-                    <th className="px-4 py-3">상태</th>
-                    <th className="px-4 py-3">작성자</th>
-                    <th className="px-4 py-3">생성일</th>
+                    <th className="px-4 py-3">{t('colTitle')}</th>
+                    <th className="px-4 py-3">{t('colEnv')}</th>
+                    <th className="px-4 py-3">{t('colStatus')}</th>
+                    <th className="px-4 py-3">{t('colAuthor')}</th>
+                    <th className="px-4 py-3">{t('colCreatedAt')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -150,7 +155,7 @@ export default function ChangeRequestListPage() {
                       key={it.id}
                       role="link"
                       tabIndex={0}
-                      aria-label={`${it.title} 상세 보기`}
+                      aria-label={t('rowDetailAriaLabel', { title: it.title })}
                       onClick={() => router.push(`/change-requests/${it.id}`)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {

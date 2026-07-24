@@ -27,12 +27,6 @@ const ENV_STYLE: Record<TargetEnv, { label: string; className: string }> = {
   PROD: { label: 'PROD', className: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300' },
 };
 
-// English fallback; page consumers of this constant are out of Task 2 scope (see report).
-export const SQL_TYPE_LABEL: Record<SqlType, string> = {
-  DDL: 'DDL (structure)',
-  DML: 'DML (data)',
-};
-
 const EXECUTION_STATUS_STYLE: Record<ExecutionStatus, string> = {
   PENDING: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300',
   RUNNING: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300',

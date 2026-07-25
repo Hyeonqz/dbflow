@@ -39,7 +39,7 @@ export class SchemaDiffService {
   async applyToChangeRequest(actor: CurrentUserPayload, dto: ApplyInput) {
     const { target, diff } = await this.computeDiff(actor, dto);
     if (diff.length === 0) {
-      throw new ConflictException('스키마 차이가 없어 변경요청을 생성할 수 없습니다.');
+      throw new ConflictException({ key: 'schemaDiff.noChanges' });
     }
 
     const files = diff.map((item, index) => ({
@@ -65,14 +65,12 @@ export class SchemaDiffService {
     // Visibility-scoped: a developer can only target DEV databases (else 404).
     const target = await this.targets.getEntityForActor(actor, dto.targetDatabaseId);
     if (target.dbType !== DbType.MYSQL) {
-      throw new ConflictException('MVP는 MYSQL 대상만 스키마 diff를 지원합니다.');
+      throw new ConflictException({ key: 'schemaDiff.mysqlOnly' });
     }
 
     const desired = parseDesiredSchema(dto.desiredSchemaSql);
     if (desired.size === 0) {
-      throw new BadRequestException(
-        'desired SQL에서 CREATE TABLE 문을 찾지 못했습니다. (CREATE TABLE 형식만 지원)',
-      );
+      throw new BadRequestException({ key: 'schemaDiff.noCreateTableFound' });
     }
 
     const current = await this.introspect(target);

@@ -54,6 +54,11 @@ const en: Catalog = {
   'delegation.ownerOrAdminOnly': 'Only the owner of the delegation or an admin may remove it.',
 
   'targetDatabase.notFound': 'Target database not found.',
+
+  'schemaDiff.noChanges': 'No schema diff — cannot create a change request.',
+  'schemaDiff.mysqlOnly': 'MVP supports schema diff for MYSQL targets only.',
+  'schemaDiff.noCreateTableFound':
+    'No CREATE TABLE statement found in the desired SQL. (Only CREATE TABLE syntax is supported.)',
 };
 
 const ko: Catalog = {
@@ -104,6 +109,11 @@ const ko: Catalog = {
   'delegation.ownerOrAdminOnly': '본인 위임 또는 관리자만 해제할 수 있습니다.',
 
   'targetDatabase.notFound': '대상 데이터베이스를 찾을 수 없습니다.',
+
+  'schemaDiff.noChanges': '스키마 차이가 없어 변경요청을 생성할 수 없습니다.',
+  'schemaDiff.mysqlOnly': 'MVP는 MYSQL 대상만 스키마 diff를 지원합니다.',
+  'schemaDiff.noCreateTableFound':
+    'desired SQL에서 CREATE TABLE 문을 찾지 못했습니다. (CREATE TABLE 형식만 지원)',
 };
 
 const MESSAGES: Record<Locale, Catalog> = { en, ko };

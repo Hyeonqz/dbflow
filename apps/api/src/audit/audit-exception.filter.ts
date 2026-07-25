@@ -1,11 +1,13 @@
 import {
   ArgumentsHost, Catch,
-  ForbiddenException, UnauthorizedException,
+  ForbiddenException, HttpException, UnauthorizedException,
 } from '@nestjs/common';
 import type { HttpServer } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
 import { AuditAction, AuditOutcome, AuditTargetType } from '@prisma/client';
 import { AuditService } from './audit.service';
+import { resolveLocale } from '../i18n/locale';
+import { translate } from '../i18n/messages';
 
 @Catch()
 export class AuditExceptionFilter extends BaseExceptionFilter {
@@ -35,6 +37,18 @@ export class AuditExceptionFilter extends BaseExceptionFilter {
         metadata: { method: req?.method, path: req?.url }, ip, userAgent,
       });
     }
+
+    // i18n: {key,args} 페이로드를 요청 로케일로 번역해 표준 메시지로 재구성
+    if (exception instanceof HttpException) {
+      const res = exception.getResponse();
+      if (res && typeof res === 'object' && 'key' in (res as Record<string, unknown>)) {
+        const { key, args } = res as { key: string; args?: Record<string, string | number> };
+        const locale = resolveLocale(req?.headers?.['accept-language']);
+        const translated = new HttpException(translate(key, locale, args), exception.getStatus());
+        return super.catch(translated, host);
+      }
+    }
+
     super.catch(exception, host); // 감사 기록 후 기본 필터에 위임 — 모든 경로에서 정상 HTTP 응답을 만든다.
   }
 }

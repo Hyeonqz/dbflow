@@ -8,7 +8,7 @@ const STRINGS = {
   loginFailed: { en: 'Sign-in failed.', ko: '로그인에 실패했습니다.' },
 } as const;
 
-function currentLocale(): 'en' | 'ko' {
+export function currentLocale(): 'en' | 'ko' {
   if (typeof document === 'undefined') return 'en';
   const m = document.cookie.match(new RegExp(`${LOCALE_COOKIE}=([^;]+)`));
   return resolveLocale(m?.[1]);

@@ -1,5 +1,5 @@
 import type { Role } from '@/lib/auth';
-import { ct } from '@/lib/i18n-client';
+import { ct, currentLocale } from '@/lib/i18n-client';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api';
 
@@ -37,6 +37,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      'Accept-Language': currentLocale(),
       ...authHeaders(),
       ...init?.headers,
     },
@@ -72,7 +73,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Accept-Language': currentLocale() },
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) throw new Error(ct('loginFailed'));
@@ -602,7 +603,7 @@ export async function downloadAuditExport(q: AuditQuery, format: 'csv' | 'json')
   const params = auditQueryParams(q);
   params.set('format', format);
   const res = await fetch(`${API_BASE}/audit-logs/export?${params.toString()}`, {
-    headers: authHeaders(),
+    headers: { ...authHeaders(), 'Accept-Language': currentLocale() },
   });
   if (!res.ok) throw new ApiError(res.status, `${ct('exportFailed')} (${res.status})`);
   const blob = await res.blob();

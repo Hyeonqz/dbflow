@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Post, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, NotFoundException, Post, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { IsString } from 'class-validator';
@@ -28,6 +28,12 @@ class ProbeController {
   @Post('validate')
   validate(@Body() _dto: LoginDto) {
     return { ok: true };
+  }
+
+  // i18n 증명용 — 서비스가 던지는 {key,args} 페이로드를 재현한다.
+  @Get('cr-not-found')
+  crNotFound() {
+    throw new NotFoundException({ key: 'changeRequest.notFound' });
   }
 }
 
@@ -76,5 +82,21 @@ describe('AuditExceptionFilter (HTTP boot)', () => {
   it('responds 400 (not a crash/hang) for a validation failure without auditing it', async () => {
     await request(app.getHttpServer()).post('/validate').send({}).expect(400);
     expect(auditMock.record).not.toHaveBeenCalled();
+  });
+
+  it('translates {key,args} exceptions per Accept-Language (ko)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/cr-not-found')
+      .set('Accept-Language', 'ko')
+      .expect(404);
+    expect(res.body.message).toBe('변경요청을 찾을 수 없습니다.');
+  });
+
+  it('translates {key,args} exceptions per Accept-Language (en default)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/cr-not-found')
+      .set('Accept-Language', 'en')
+      .expect(404);
+    expect(res.body.message).toBe('Change request not found.');
   });
 });

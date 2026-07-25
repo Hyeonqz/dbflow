@@ -148,7 +148,7 @@ export class ChangeRequestService {
       include: DETAIL_INCLUDE,
     });
     if (!changeRequest) {
-      throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'changeRequest.notFound' });
     }
     return this.toDetail(changeRequest, user.userId, delegatorIds);
   }
@@ -167,7 +167,7 @@ export class ChangeRequestService {
     const required = await this.policy.getRequired(changeRequest.targetEnv);
     const count = await this.prisma.changeRequestApprover.count({ where: { changeRequestId: id } });
     if (!changeRequest.reviewerId || count !== required) {
-      throw new BadRequestException(`제출하려면 검토자 1명과 결재자 ${required}명을 지정해야 합니다.`);
+      throw new BadRequestException({ key: 'changeRequest.submitRequiresAssignees', args: { required } });
     }
     return this.applyTransition(changeRequest, 'SUBMIT', actor, null);
   }

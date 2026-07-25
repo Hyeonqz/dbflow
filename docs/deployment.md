@@ -1,0 +1,67 @@
+# Production deployment
+
+The `docker compose` stack is complete but intentionally minimal: it publishes **only the web port (3000) over plain HTTP**, with the API and MySQL kept on the internal Docker network. That is fine for evaluation and internal networks, but a production deployment — especially in the regulated environments DBFlow targets — needs two things this stack deliberately leaves to you:
+
+1. **TLS termination** — DBFlow does not terminate TLS itself. Put a reverse proxy in front.
+2. **Real client IPs in the audit log** — without a proxy that sets `X-Forwarded-For`, the append-only audit trail records the internal web-container IP instead of the actual client.
+
+Both are solved by running a TLS-terminating reverse proxy in front of the web service.
+
+## Architecture
+
+```
+client ──HTTPS──▶ reverse proxy ──HTTP──▶ web:3000 ──▶ (internal) api:3001 ──▶ mysql:3306
+        (TLS)      (nginx/Caddy)          (Next.js)      (same-origin proxy)
+```
+
+The web app already proxies `/api/*` to the API internally (same-origin), and the API trusts one proxy hop (`trust proxy` is enabled) so it reads the client IP from `X-Forwarded-For`. You only add the outermost TLS layer.
+
+## Option A — Caddy (simplest, automatic TLS)
+
+Caddy obtains and renews Let's Encrypt certificates automatically. `Caddyfile`:
+
+```
+dbflow.example.com {
+    reverse_proxy web:3000
+}
+```
+
+Add Caddy to your compose (or run it separately on the same network). It sets `X-Forwarded-For` and `X-Forwarded-Proto` by default — no extra config needed for the audit-IP chain to work.
+
+## Option B — nginx (bring your own certs)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name dbflow.example.com;
+
+    ssl_certificate     /etc/ssl/certs/dbflow.crt;
+    ssl_certificate_key /etc/ssl/private/dbflow.key;
+
+    location / {
+        proxy_pass http://web:3000;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;  # real client IP → audit log
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+    }
+}
+
+# redirect HTTP → HTTPS
+server {
+    listen 80;
+    server_name dbflow.example.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+`$proxy_add_x_forwarded_for` appends the client address, so the API's audit log captures the true client IP. If you run **more than one** proxy hop in front of DBFlow, increase the API's trusted-hop count accordingly (the API currently trusts exactly one — `trust proxy: 1` in `apps/api/src/main.ts`).
+
+## Production checklist
+
+- **Strong secrets** — `JWT_SECRET` and `APP_ENCRYPTION_KEY` must be real (`openssl rand -hex 32`). The API refuses to boot with default/weak values, so this is enforced, not optional.
+- **`DBFLOW_DEMO=false`** — never seed demo accounts (password `password1234`) in production. Provision the first admin via `DBFLOW_ADMIN_EMAIL` / `DBFLOW_ADMIN_PASSWORD` instead.
+- **Keep API and MySQL unpublished** — the default compose exposes only web:3000. Do not add host port mappings for `api` or `mysql`; all API traffic should flow through the same-origin web proxy behind TLS.
+- **`DBFLOW_CORS_ORIGINS`** — only needed if you expose the API directly to browsers (not the case with the reverse-proxy setup above). Leave unset otherwise.
+- **Database backups** — application backups taken before each apply are stored **in** the MySQL database, so they share the `dbflow_mysql_data` volume's fate. Back up that volume (or `mysqldump`) on your own schedule; losing the volume loses both the data and its pre-apply backups.
+- **Timezone** — the backend currently assumes `Asia/Seoul` for apply-window and freeze-period evaluation (`TZ=Asia/Seoul`, set in compose). Per-deployment timezone configuration is a planned enhancement; until then, apply windows are interpreted in KST regardless of where you host.

@@ -87,6 +87,10 @@ All configuration is via environment variables — see `.env.example` for the an
 | `PORT` | no | API port (default `3001`). |
 | `TZ` | no | Server timezone; apply-window evaluation assumes `Asia/Seoul`. |
 
+## Production deployment
+
+The bundled stack serves plain HTTP on port 3000. For production — TLS termination, real client IPs in the audit log, and a hardening checklist — put a reverse proxy in front. See **[docs/deployment.md](docs/deployment.md)**.
+
 ## Development
 
 For local development (dev-mode apps against a Dockerized MySQL, with demo accounts seeded):

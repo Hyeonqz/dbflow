@@ -73,7 +73,7 @@ export class TargetDatabaseService {
       where: { id, ...this.visibilityWhere(actor) },
     });
     if (!target) {
-      throw new NotFoundException('대상 데이터베이스를 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'targetDatabase.notFound' });
     }
     return this.sanitize(target);
   }
@@ -161,7 +161,7 @@ export class TargetDatabaseService {
       where: { id, ...this.visibilityWhere(actor) },
     });
     if (!target) {
-      throw new NotFoundException('대상 데이터베이스를 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'targetDatabase.notFound' });
     }
     return target;
   }
@@ -176,7 +176,7 @@ export class TargetDatabaseService {
   private async getOrThrow(id: string): Promise<TargetDatabase> {
     const target = await this.prisma.targetDatabase.findUnique({ where: { id } });
     if (!target) {
-      throw new NotFoundException('대상 데이터베이스를 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'targetDatabase.notFound' });
     }
     return target;
   }

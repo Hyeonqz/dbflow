@@ -20,6 +20,24 @@ const en: Catalog = {
     'Only the author can change assignees while in DRAFT; only an admin may change them after submission.',
   'changeRequest.approverCountMismatch':
     'A submitted request must have exactly {required} approver(s) assigned.',
+
+  'apply.targetNotFound': 'Target database not found.',
+  'apply.mysqlOnly': 'MVP supports apply to MYSQL targets only.',
+  'apply.blockLintDetected': 'Apply rejected: risky SQL (BLOCK) detected: {items}',
+  'apply.rejectedOrAppliedStatus':
+    'A change request in a rejected/applied status ({status}) cannot be applied.',
+  'apply.stagingProdRequiresFinalApproved':
+    'STAGING/PROD apply requires FINAL_APPROVED status. (current: {status})',
+  'apply.alreadyRunning': 'An apply is already running. Try again after it finishes.',
+  'apply.devPermissionDenied': 'DEV apply is allowed only for APPROVER or the request author (developer).',
+  'apply.stagingProdPermissionDenied': 'STAGING/PROD apply is allowed only for APPROVER.',
+  'apply.envMismatch': 'Environment mismatch: change request ({crEnv}) and target DB ({targetEnv}) differ.',
+
+  'rollback.executionNotFound': 'Execution not found.',
+  'rollback.mustBeApplyExecution': 'The rollback target must be an APPLY execution.',
+  'rollback.noBackup': 'No linked backup — cannot roll back.',
+
+  'dryRun.mysqlOnly': 'MVP supports dry-run for MYSQL targets only.',
 };
 
 const ko: Catalog = {
@@ -37,6 +55,23 @@ const ko: Catalog = {
   'changeRequest.assigneesChangeForbidden':
     'DRAFT 상태에서는 작성자만, 제출 후에는 관리자만 지정을 변경할 수 있습니다.',
   'changeRequest.approverCountMismatch': '제출된 요청은 결재자 {required}명을 지정해야 합니다.',
+
+  'apply.targetNotFound': '대상 데이터베이스를 찾을 수 없습니다.',
+  'apply.mysqlOnly': 'MVP는 MYSQL 대상만 적용을 지원합니다.',
+  'apply.blockLintDetected': '위험 SQL(BLOCK)이 감지되어 적용을 거부합니다: {items}',
+  'apply.rejectedOrAppliedStatus': '거부/적용완료 상태({status})의 변경요청은 적용할 수 없습니다.',
+  'apply.stagingProdRequiresFinalApproved':
+    'STAGING/PROD 적용은 FINAL_APPROVED 상태에서만 가능합니다. (현재: {status})',
+  'apply.alreadyRunning': '이미 진행 중인 적용이 있습니다. 완료 후 다시 시도하세요.',
+  'apply.devPermissionDenied': 'DEV 적용은 APPROVER 또는 변경요청 작성자(개발자)만 가능합니다.',
+  'apply.stagingProdPermissionDenied': 'STAGING/PROD 적용은 APPROVER만 가능합니다.',
+  'apply.envMismatch': '환경 불일치: 변경요청({crEnv})과 대상 DB({targetEnv})의 환경이 다릅니다.',
+
+  'rollback.executionNotFound': '실행 이력을 찾을 수 없습니다.',
+  'rollback.mustBeApplyExecution': '롤백 대상은 적용(APPLY) 실행이어야 합니다.',
+  'rollback.noBackup': '연결된 백업이 없어 롤백할 수 없습니다.',
+
+  'dryRun.mysqlOnly': 'MVP는 MYSQL 대상만 dry-run을 지원합니다.',
 };
 
 const MESSAGES: Record<Locale, Catalog> = { en, ko };

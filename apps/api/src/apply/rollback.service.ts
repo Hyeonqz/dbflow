@@ -41,16 +41,16 @@ export class RollbackService {
       include: { changeRequest: true, targetDatabase: true },
     });
     if (!execution) {
-      throw new NotFoundException('실행 이력을 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'rollback.executionNotFound' });
     }
     if (execution.kind !== ExecutionKind.APPLY) {
-      throw new ConflictException('롤백 대상은 적용(APPLY) 실행이어야 합니다.');
+      throw new ConflictException({ key: 'rollback.mustBeApplyExecution' });
     }
 
     assertApplyPermission(actor, execution.targetDatabase.env, execution.changeRequest.authorId);
 
     if (!execution.backupId) {
-      throw new ConflictException('연결된 백업이 없어 롤백할 수 없습니다.');
+      throw new ConflictException({ key: 'rollback.noBackup' });
     }
 
     const payload = await this.backups.loadPayload(execution.backupId);

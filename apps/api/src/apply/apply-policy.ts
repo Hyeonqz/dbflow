@@ -23,20 +23,18 @@ export function assertApplyPermission(actor: SafetyActor, env: TargetEnv, author
       actor.role === Role.APPROVER ||
       (actor.role === Role.DEVELOPER && actor.userId === authorId);
     if (!allowed) {
-      throw new ForbiddenException('DEV 적용은 APPROVER 또는 변경요청 작성자(개발자)만 가능합니다.');
+      throw new ForbiddenException({ key: 'apply.devPermissionDenied' });
     }
     return;
   }
   if (actor.role !== Role.APPROVER) {
-    throw new ForbiddenException('STAGING/PROD 적용은 APPROVER만 가능합니다.');
+    throw new ForbiddenException({ key: 'apply.stagingProdPermissionDenied' });
   }
 }
 
 /** Rejects when the change request's env does not match the target DB's env. */
 export function assertEnvMatch(crEnv: TargetEnv, targetEnv: TargetEnv): void {
   if (crEnv !== targetEnv) {
-    throw new ConflictException(
-      `환경 불일치: 변경요청(${crEnv})과 대상 DB(${targetEnv})의 환경이 다릅니다.`,
-    );
+    throw new ConflictException({ key: 'apply.envMismatch', args: { crEnv, targetEnv } });
   }
 }

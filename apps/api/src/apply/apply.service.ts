@@ -59,14 +59,14 @@ export class ApplyService {
       include: { files: { orderBy: { order: 'asc' } } },
     });
     if (!changeRequest) {
-      throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'changeRequest.notFound' });
     }
 
     const target = await this.prisma.targetDatabase.findUnique({
       where: { id: dto.targetDatabaseId },
     });
     if (!target) {
-      throw new NotFoundException('대상 데이터베이스를 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'apply.targetNotFound' });
     }
 
     // 2. Environment match.
@@ -83,7 +83,7 @@ export class ApplyService {
 
     // MVP executes MYSQL targets only.
     if (target.dbType !== 'MYSQL') {
-      throw new ConflictException('MVP는 MYSQL 대상만 적용을 지원합니다.');
+      throw new ConflictException({ key: 'apply.mysqlOnly' });
     }
 
     // 4.5 Risky-SQL lint gate (env-aware). STAGING/PROD block on effective BLOCK;
@@ -92,11 +92,10 @@ export class ApplyService {
     const lint = lintFiles(changeRequest.files, policy);
     if (hasBlock(lint)) {
       const blocked = lint.items.filter((i) => i.severity === 'BLOCK');
-      throw new ConflictException(
-        `위험 SQL(BLOCK)이 감지되어 적용을 거부합니다: ${blocked
-          .map((i) => `${i.filename}:${i.rule}`)
-          .join(', ')}`,
-      );
+      throw new ConflictException({
+        key: 'apply.blockLintDetected',
+        args: { items: blocked.map((i) => `${i.filename}:${i.rule}`).join(', ') },
+      });
     }
 
     // 5. Concurrency guard + RUNNING execution creation, serialized via row lock.
@@ -188,7 +187,7 @@ export class ApplyService {
       include: { files: { orderBy: { order: 'asc' } } },
     });
     if (!changeRequest) {
-      throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'changeRequest.notFound' });
     }
     const policy = await this.sqlReview.getPolicyMap(changeRequest.targetEnv);
     const result = lintFiles(changeRequest.files, policy);
@@ -202,7 +201,7 @@ export class ApplyService {
       select: { id: true },
     });
     if (!exists) {
-      throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'changeRequest.notFound' });
     }
     return this.prisma.execution.findMany({
       where: { changeRequestId },
@@ -217,16 +216,12 @@ export class ApplyService {
   private assertApprovalGate(env: TargetEnv, status: ChangeRequestStatus): void {
     if (env === TargetEnv.DEV) {
       if (DEV_BLOCKED_STATUSES.includes(status)) {
-        throw new ConflictException(
-          `거부/적용완료 상태(${status})의 변경요청은 적용할 수 없습니다.`,
-        );
+        throw new ConflictException({ key: 'apply.rejectedOrAppliedStatus', args: { status } });
       }
       return;
     }
     if (status !== ChangeRequestStatus.FINAL_APPROVED) {
-      throw new ConflictException(
-        `STAGING/PROD 적용은 FINAL_APPROVED 상태에서만 가능합니다. (현재: ${status})`,
-      );
+      throw new ConflictException({ key: 'apply.stagingProdRequiresFinalApproved', args: { status } });
     }
   }
 
@@ -244,7 +239,7 @@ export class ApplyService {
         where: { changeRequestId, status: ExecutionStatus.RUNNING },
       });
       if (running > 0) {
-        throw new ConflictException('이미 진행 중인 적용이 있습니다. 완료 후 다시 시도하세요.');
+        throw new ConflictException({ key: 'apply.alreadyRunning' });
       }
       return tx.execution.create({
         data: {

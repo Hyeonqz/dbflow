@@ -43,20 +43,20 @@ export class DryRunService {
       include: { files: { orderBy: { order: 'asc' } } },
     });
     if (!changeRequest) {
-      throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'changeRequest.notFound' });
     }
 
     const target = await this.prisma.targetDatabase.findUnique({
       where: { id: dto.targetDatabaseId },
     });
     if (!target) {
-      throw new NotFoundException('대상 데이터베이스를 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'apply.targetNotFound' });
     }
 
     assertEnvMatch(changeRequest.targetEnv, target.env);
     assertApplyPermission(actor, target.env, changeRequest.authorId);
     if (target.dbType !== 'MYSQL') {
-      throw new ConflictException('MVP는 MYSQL 대상만 dry-run을 지원합니다.');
+      throw new ConflictException({ key: 'dryRun.mysqlOnly' });
     }
 
     const connection = await this.connect(target);

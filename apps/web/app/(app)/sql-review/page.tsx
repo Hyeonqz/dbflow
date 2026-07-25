@@ -28,6 +28,7 @@ function levelClass(level: SqlReviewLevel): string {
 export default function SqlReviewPolicyPage() {
   const t = useTranslations('sqlReview');
   const tCommon = useTranslations('common');
+  const ts = useTranslations('serverMessages');
   const { user, ready } = useUser();
   const [rules, setRules] = useState<SqlReviewRuleRow[] | null>(null);
   const [error, setError] = useState('');
@@ -103,7 +104,11 @@ export default function SqlReviewPolicyPage() {
                   <tr key={rule.ruleKey} className="bg-card">
                     <td className="px-4 py-3">
                       <p className="font-mono text-xs font-semibold text-ink">{rule.ruleKey}</p>
-                      <p className="mt-1 text-xs text-muted">{rule.message}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        {ts.has(`lintRule.${rule.ruleKey}`)
+                          ? ts(`lintRule.${rule.ruleKey}`)
+                          : rule.message}
+                      </p>
                     </td>
                     {ENV_COLUMNS.map((env) => (
                       <td key={env} className="px-4 py-3">

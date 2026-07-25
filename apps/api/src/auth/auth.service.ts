@@ -16,7 +16,7 @@ export class AuthService {
   async validateAndLogin(email: string, password: string) {
     const user = await this.users.findByEmail(email);
     if (!user || !(await verifyPassword(user.passwordHash, password))) {
-      throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedException({ key: 'auth.invalidCredentials' });
     }
     const accessToken = this.jwt.sign({ sub: user.id, role: user.role });
     await this.audit.record({

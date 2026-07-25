@@ -59,6 +59,10 @@ const en: Catalog = {
   'schemaDiff.mysqlOnly': 'MVP supports schema diff for MYSQL targets only.',
   'schemaDiff.noCreateTableFound':
     'No CREATE TABLE statement found in the desired SQL. (Only CREATE TABLE syntax is supported.)',
+
+  'sqlReview.unknownRule': 'Unknown rule.',
+
+  'auth.invalidCredentials': 'Invalid email or password.',
 };
 
 const ko: Catalog = {
@@ -114,6 +118,10 @@ const ko: Catalog = {
   'schemaDiff.mysqlOnly': 'MVP는 MYSQL 대상만 스키마 diff를 지원합니다.',
   'schemaDiff.noCreateTableFound':
     'desired SQL에서 CREATE TABLE 문을 찾지 못했습니다. (CREATE TABLE 형식만 지원)',
+
+  'sqlReview.unknownRule': '알 수 없는 규칙입니다.',
+
+  'auth.invalidCredentials': '이메일 또는 비밀번호가 올바르지 않습니다.',
 };
 
 const MESSAGES: Record<Locale, Catalog> = { en, ko };

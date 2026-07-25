@@ -45,7 +45,7 @@ export class SqlReviewService {
   }
 
   async update(env: TargetEnv, ruleKey: string, level: SqlReviewLevel, actor: AuditActorSnapshot) {
-    if (!RULE_KEYS.has(ruleKey)) throw new BadRequestException('알 수 없는 규칙입니다.');
+    if (!RULE_KEYS.has(ruleKey)) throw new BadRequestException({ key: 'sqlReview.unknownRule' });
     const prev = await this.prisma.sqlReviewRule.findUnique({ where: { env_ruleKey: { env, ruleKey } }, select: { level: true } });
     await this.prisma.sqlReviewRule.upsert({
       where: { env_ruleKey: { env, ruleKey } },

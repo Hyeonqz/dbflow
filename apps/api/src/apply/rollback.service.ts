@@ -130,7 +130,6 @@ export class RollbackService {
     ok: boolean;
     rowsAffected?: number;
     error?: string;
-    errorKey?: string;
     hard?: boolean;
   }> {
     // The apply created this table — undo by dropping it.
@@ -147,8 +146,9 @@ export class RollbackService {
     if (!table.dataIncluded) {
       return {
         ok: false,
+        // 이 error는 ExecutionStep.error로 영구 저장된다(드라이버 원문과 같은 필드) —
+        // 국제화하지 않고 영어로 통일한다.
         error: 'Schema-only backup — data cannot be restored (row threshold exceeded or not captured).',
-        errorKey: 'rollback.schemaOnlyNoData',
       };
     }
 

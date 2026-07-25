@@ -54,7 +54,7 @@ export class BackupService {
     changeRequestId: string;
     target: TargetDatabase;
     files: { content: string }[];
-  }): Promise<Backup & { noteKey?: string }> {
+  }): Promise<Backup> {
     const limit = maxRows();
     const tables = affectedTables(params.files);
 
@@ -88,7 +88,9 @@ export class BackupService {
           : null,
       },
     });
-    return { ...created, noteKey: downgraded ? 'backup.schemaOnly' : undefined };
+    // note는 Backup 레코드로 영구 저장된다 — 번역 키를 실어도 조회 경로(listBackups)에서
+    // 사라지므로 국제화하지 않고 영어로 통일한다(감사 증적: 저장 시점 언어 유지).
+    return created;
   }
 
   /** Backup list for a change request (payload excluded). */

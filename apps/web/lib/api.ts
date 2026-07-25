@@ -272,7 +272,7 @@ export type UpdateTargetDatabaseInput = Partial<CreateTargetDatabaseInput>;
 /** 연결 테스트 결과. 성공/실패 모두 HTTP 200으로 내려옵니다. */
 export type TestConnectionResult =
   | { success: true; serverVersion: string; latencyMs: number }
-  | { success: false; error: string };
+  | { success: false; error: string; errorKey?: string };
 
 export type ExecutionStep = {
   id: string;

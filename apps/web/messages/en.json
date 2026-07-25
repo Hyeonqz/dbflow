@@ -430,5 +430,19 @@
     "emptyList": "No policies registered.",
     "envColumn": "Environment",
     "requiredApprovalsColumn": "Required approvals"
+  },
+  "serverMessages": {
+    "lintRule": {
+      "DROP_DATABASE": "DROP DATABASE deletes the entire database.",
+      "DROP_TABLE": "DROP TABLE deletes the table and all of its data.",
+      "TRUNCATE": "TRUNCATE deletes every row in the table (irreversible).",
+      "DELETE_WITHOUT_WHERE": "DELETE without a WHERE clause deletes every row in the table.",
+      "UPDATE_WITHOUT_WHERE": "UPDATE without a WHERE clause modifies every row in the table.",
+      "ALTER_DROP_COLUMN": "Dropping a column loses that column's data.",
+      "DROP_INDEX": "Dropping an index may affect query performance."
+    },
+    "targetDatabase": {
+      "mysqlOnly": "Only MYSQL targets support connection testing."
+    }
   }
 }

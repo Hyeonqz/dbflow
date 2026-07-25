@@ -599,6 +599,7 @@ function ApplyPanel({
 }) {
   const locale = useLocale() as Locale;
   const t = useTranslations('changeRequestDetail');
+  const ts = useTranslations('serverMessages');
   const [dbs, setDbs] = useState<TargetDatabase[] | null>(null);
   const [dbNotice, setDbNotice] = useState('');
   const [selectedId, setSelectedId] = useState('');
@@ -730,7 +731,9 @@ function ApplyPanel({
                     {item.filename}
                     {item.line ? `:${item.line}` : ''} · {item.rule}
                   </span>
-                  <p className="text-ink">{item.message}</p>
+                  <p className="text-ink">
+                    {ts.has(`lintRule.${item.rule}`) ? ts(`lintRule.${item.rule}`) : item.message}
+                  </p>
                 </div>
               </li>
             ))}

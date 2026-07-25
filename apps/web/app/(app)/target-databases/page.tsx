@@ -128,6 +128,7 @@ function TargetDatabaseCard({
 }) {
   const t = useTranslations('targetDatabases');
   const tCommon = useTranslations('common');
+  const ts = useTranslations('serverMessages');
   const locale = useLocale() as Locale;
   const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -225,7 +226,12 @@ function TargetDatabaseCard({
         >
           {testResult.success
             ? t('testSuccess', { dbType: db.dbType, version: testResult.serverVersion, latencyMs: testResult.latencyMs })
-            : t('testFailure', { error: testResult.error })}
+            : t('testFailure', {
+                error:
+                  testResult.errorKey && ts.has(testResult.errorKey)
+                    ? ts(testResult.errorKey)
+                    : testResult.error,
+              })}
         </p>
       )}
     </div>

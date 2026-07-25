@@ -1037,10 +1037,10 @@ describe('SoD guard — one actor fills at most one approver slot per CR', () =>
 
     await expect(
       svcInstance.approve({ userId: 'p1', role: 'APPROVER' } as any, 'c1', { decision: 'APPROVE' } as any),
-    ).rejects.toMatchObject({ message: expect.stringContaining('직무분리') });
+    ).rejects.toMatchObject({ response: { key: 'changeRequest.sodViolation' } });
     await expect(
       svcInstance.approve({ userId: 'p1', role: 'APPROVER' } as any, 'c1', { decision: 'APPROVE' } as any),
-    ).rejects.not.toMatchObject({ message: '이미 결재하셨습니다.' });
+    ).rejects.not.toMatchObject({ response: { key: 'changeRequest.alreadyDecided' } });
   });
 
   describe('toDetail: iAlreadyActed / canActAsDelegate gating', () => {

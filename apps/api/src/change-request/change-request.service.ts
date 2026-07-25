@@ -162,7 +162,7 @@ export class ChangeRequestService {
   async submit(actor: CurrentUserPayload, id: string) {
     const changeRequest = await this.getOrThrow(id);
     if (changeRequest.authorId !== actor.userId) {
-      throw new ForbiddenException('작성자만 제출할 수 있습니다.');
+      throw new ForbiddenException({ key: 'changeRequest.submitAuthorOnly' });
     }
     const required = await this.policy.getRequired(changeRequest.targetEnv);
     const count = await this.prisma.changeRequestApprover.count({ where: { changeRequestId: id } });
@@ -181,13 +181,13 @@ export class ChangeRequestService {
         where: { id },
         select: { id: true, status: true, reviewerId: true },
       });
-      if (!cr) throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      if (!cr) throw new NotFoundException({ key: 'changeRequest.notFound' });
       const rid = cr.reviewerId;
       const isDirect = rid === actor.userId;
       const isDelegate =
         !isDirect && !!rid && (await this.delegation.isActiveDelegateFor(actor.userId, rid));
       if (!isDirect && !isDelegate)
-        throw new ForbiddenException('지정된 검토자 또는 활성 대리인만 검토할 수 있습니다.');
+        throw new ForbiddenException({ key: 'changeRequest.reviewForbidden' });
       const toStatus = getNextStatus(cr.status, action); // 이미 전이됨이면 throw → 이중 검토 차단
       const delegatorName = isDelegate
         ? (await tx.user.findUnique({ where: { id: rid! }, select: { name: true } }))?.name ?? null
@@ -240,9 +240,12 @@ export class ChangeRequestService {
         where: { id },
         select: { id: true, status: true, authorId: true },
       });
-      if (!cr) throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      if (!cr) throw new NotFoundException({ key: 'changeRequest.notFound' });
       if (cr.status !== ChangeRequestStatus.REVIEW_APPROVED)
-        throw new ConflictException(`현재 상태(${cr.status})에서는 결재할 수 없습니다.`);
+        throw new ConflictException({
+          key: 'changeRequest.approveInvalidStatus',
+          args: { status: cr.status },
+        });
       const mine = await tx.changeRequestApprover.findUnique({
         where: { changeRequestId_userId: { changeRequestId: id, userId: actor.userId } },
       });
@@ -262,8 +265,9 @@ export class ChangeRequestService {
         }
       }
       if (!slot) {
-        if (mine && mine.decision !== null) throw new ConflictException('이미 결재하셨습니다.');
-        throw new ForbiddenException('지정된 결재자 또는 활성 대리인만 결재할 수 있습니다.');
+        if (mine && mine.decision !== null)
+          throw new ConflictException({ key: 'changeRequest.alreadyDecided' });
+        throw new ForbiddenException({ key: 'changeRequest.approveForbidden' });
       }
 
       // 직무분리(SoD): 한 사람이 직접·대리를 합쳐 한 CR에 최대 한 슬롯만 채울 수 있다.
@@ -279,9 +283,7 @@ export class ChangeRequestService {
         select: { id: true },
       });
       if (priorByActor) {
-        throw new ConflictException(
-          '직무분리 정책상 한 변경요청에 두 번(직접·대리 포함) 결재할 수 없습니다.',
-        );
+        throw new ConflictException({ key: 'changeRequest.sodViolation' });
       }
 
       const decision: ApprovalDecision =
@@ -357,17 +359,17 @@ export class ChangeRequestService {
         select: { role: true },
       });
       if (!r || r.role !== Role.REVIEWER)
-        throw new BadRequestException('검토자는 REVIEWER여야 합니다.');
+        throw new BadRequestException({ key: 'changeRequest.reviewerMustBeReviewerRole' });
     }
     if (approverIds && approverIds.length) {
       if (new Set(approverIds).size !== approverIds.length)
-        throw new BadRequestException('결재자가 중복되었습니다.');
+        throw new BadRequestException({ key: 'changeRequest.duplicateApprovers' });
       const rows = await this.prisma.user.findMany({
         where: { id: { in: approverIds } },
         select: { id: true, role: true },
       });
       if (rows.length !== approverIds.length || rows.some((u) => u.role !== Role.APPROVER))
-        throw new BadRequestException('결재자는 모두 APPROVER여야 합니다.');
+        throw new BadRequestException({ key: 'changeRequest.approversMustBeApproverRole' });
     }
   }
 
@@ -377,7 +379,7 @@ export class ChangeRequestService {
       select: { id: true, status: true, authorId: true, reviewerId: true, targetEnv: true },
     });
     if (!changeRequest) {
-      throw new NotFoundException('변경요청을 찾을 수 없습니다.');
+      throw new NotFoundException({ key: 'changeRequest.notFound' });
     }
     return changeRequest;
   }
@@ -524,15 +526,16 @@ export class ChangeRequestService {
     const isDraft = cr.status === ChangeRequestStatus.DRAFT;
     const allowed = (isDraft && cr.authorId === user.userId) || user.role === Role.ADMIN;
     if (!allowed) {
-      throw new ForbiddenException(
-        'DRAFT 상태에서는 작성자만, 제출 후에는 관리자만 지정을 변경할 수 있습니다.',
-      );
+      throw new ForbiddenException({ key: 'changeRequest.assigneesChangeForbidden' });
     }
     await this.assertAssigneeRoles(dto.reviewerId, dto.approverIds);
     if (dto.approverIds !== undefined && !isDraft) {
       const required = await this.policy.getRequired(cr.targetEnv);
       if (dto.approverIds.length !== required) {
-        throw new BadRequestException(`제출된 요청은 결재자 ${required}명을 지정해야 합니다.`);
+        throw new BadRequestException({
+          key: 'changeRequest.approverCountMismatch',
+          args: { required },
+        });
       }
     }
     await this.prisma.$transaction(async (tx) => {

@@ -44,14 +44,14 @@ describe('DelegationService.createDelegation', () => {
       { id: 'X', role: 'APPROVER' }, { id: 'Y', role: 'REVIEWER' }]) });
     await expect(s.createDelegation(
       { delegateId: 'Y', startsAt: '2026-07-01T00:00', endsAt: '2026-07-02T00:00' } as any, appr as any,
-    )).rejects.toThrow(/같은 역할/);
+    )).rejects.toMatchObject({ response: { key: 'delegation.sameRoleOnly' } });
   });
 
   it('rejects startsAt >= endsAt', async () => {
     const s = svc({ users: () => Promise.resolve([{ id: 'X', role: 'APPROVER' }, { id: 'Y', role: 'APPROVER' }]) });
     await expect(s.createDelegation(
       { delegateId: 'Y', startsAt: '2026-07-02T00:00', endsAt: '2026-07-01T00:00' } as any, appr as any,
-    )).rejects.toThrow(/시작/);
+    )).rejects.toMatchObject({ response: { key: 'delegation.startBeforeEnd' } });
   });
 
   it('non-admin forces delegatorId to self and converts KST', async () => {

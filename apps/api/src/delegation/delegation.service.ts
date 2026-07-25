@@ -54,10 +54,10 @@ export class DelegationService {
     // createDelegation은 인증된 actor로만 호출됨.
     const delegatorId = actor.role === Role.ADMIN && dto.delegatorId ? dto.delegatorId : actor.userId!;
     if (delegatorId === dto.delegateId)
-      throw new BadRequestException('자기 자신에게 위임할 수 없습니다.');
+      throw new BadRequestException({ key: 'delegation.selfDelegationForbidden' });
     const startsAt = parseKst(dto.startsAt);
     const endsAt = parseKst(dto.endsAt);
-    if (!(startsAt < endsAt)) throw new BadRequestException('위임 시작이 종료보다 빨라야 합니다.');
+    if (!(startsAt < endsAt)) throw new BadRequestException({ key: 'delegation.startBeforeEnd' });
 
     const users = await this.prisma.user.findMany({
       where: { id: { in: [delegatorId, dto.delegateId] } },
@@ -67,7 +67,7 @@ export class DelegationService {
     const dee = users.find((u) => u.id === dto.delegateId);
     const ALLOWED: Role[] = [Role.REVIEWER, Role.APPROVER];
     if (!del || !dee || del.role !== dee.role || !ALLOWED.includes(del.role))
-      throw new BadRequestException('위임자와 대리인은 같은 역할(검토자 또는 결재자)이어야 합니다.');
+      throw new BadRequestException({ key: 'delegation.sameRoleOnly' });
 
     const row = await this.prisma.delegation.create({
       data: { delegatorId, delegateId: dto.delegateId, startsAt, endsAt, reason: dto.reason ?? null, createdById: actor.userId! },
@@ -82,9 +82,9 @@ export class DelegationService {
 
   async deleteDelegation(id: string, actor: AuditActorSnapshot & { role: Role }) {
     const row = await this.prisma.delegation.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException('위임을 찾을 수 없습니다.');
+    if (!row) throw new NotFoundException({ key: 'delegation.notFound' });
     if (actor.role !== Role.ADMIN && row.delegatorId !== actor.userId)
-      throw new ForbiddenException('본인 위임 또는 관리자만 해제할 수 있습니다.');
+      throw new ForbiddenException({ key: 'delegation.ownerOrAdminOnly' });
     await this.prisma.delegation.delete({ where: { id } });
     await this.audit.record({
       actor, action: AuditAction.DELEGATION_UPDATED, targetType: AuditTargetType.DELEGATION, targetId: id,

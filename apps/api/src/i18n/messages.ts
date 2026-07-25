@@ -46,6 +46,12 @@ const en: Catalog = {
   'applySchedule.windowNotFound': 'Apply window not found.',
   'applySchedule.freezeStartAfterEnd': 'Freeze start must be before end.',
   'applySchedule.freezeNotFound': 'Freeze period not found.',
+
+  'delegation.selfDelegationForbidden': 'You cannot delegate to yourself.',
+  'delegation.startBeforeEnd': 'Delegation start must be before end.',
+  'delegation.sameRoleOnly': 'The delegator and delegate must have the same role (REVIEWER or APPROVER).',
+  'delegation.notFound': 'Delegation not found.',
+  'delegation.ownerOrAdminOnly': 'Only the owner of the delegation or an admin may remove it.',
 };
 
 const ko: Catalog = {
@@ -88,6 +94,12 @@ const ko: Catalog = {
   'applySchedule.windowNotFound': '작업창을 찾을 수 없습니다.',
   'applySchedule.freezeStartAfterEnd': '동결 시작이 종료보다 빨라야 합니다.',
   'applySchedule.freezeNotFound': '동결 기간을 찾을 수 없습니다.',
+
+  'delegation.selfDelegationForbidden': '자기 자신에게 위임할 수 없습니다.',
+  'delegation.startBeforeEnd': '위임 시작이 종료보다 빨라야 합니다.',
+  'delegation.sameRoleOnly': '위임자와 대리인은 같은 역할(검토자 또는 결재자)이어야 합니다.',
+  'delegation.notFound': '위임을 찾을 수 없습니다.',
+  'delegation.ownerOrAdminOnly': '본인 위임 또는 관리자만 해제할 수 있습니다.',
 };
 
 const MESSAGES: Record<Locale, Catalog> = { en, ko };

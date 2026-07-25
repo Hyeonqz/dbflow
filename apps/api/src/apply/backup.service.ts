@@ -54,7 +54,7 @@ export class BackupService {
     changeRequestId: string;
     target: TargetDatabase;
     files: { content: string }[];
-  }): Promise<Backup> {
+  }): Promise<Backup & { noteKey?: string }> {
     const limit = maxRows();
     const tables = affectedTables(params.files);
 
@@ -75,7 +75,7 @@ export class BackupService {
     const payload = JSON.stringify({ tables: snapshots } satisfies BackupPayload);
     const anyData = snapshots.some((s) => s.dataIncluded);
 
-    return this.prisma.backup.create({
+    const created = await this.prisma.backup.create({
       data: {
         changeRequestId: params.changeRequestId,
         targetDatabaseId: params.target.id,
@@ -84,10 +84,11 @@ export class BackupService {
         payload,
         sizeBytes: Buffer.byteLength(payload, 'utf8'),
         note: downgraded
-          ? '일부 테이블이 BACKUP_MAX_ROWS 초과로 데이터 없이 schema-only 로 저장되었습니다.'
+          ? 'Some tables exceeded BACKUP_MAX_ROWS and were stored schema-only, without data.'
           : null,
       },
     });
+    return { ...created, noteKey: downgraded ? 'backup.schemaOnly' : undefined };
   }
 
   /** Backup list for a change request (payload excluded). */

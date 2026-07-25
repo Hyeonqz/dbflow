@@ -126,7 +126,13 @@ export class RollbackService {
   private async restoreTable(
     connection: Connection,
     table: TableSnapshot,
-  ): Promise<{ ok: boolean; rowsAffected?: number; error?: string; hard?: boolean }> {
+  ): Promise<{
+    ok: boolean;
+    rowsAffected?: number;
+    error?: string;
+    errorKey?: string;
+    hard?: boolean;
+  }> {
     // The apply created this table — undo by dropping it.
     if (!table.existedBefore) {
       try {
@@ -139,7 +145,11 @@ export class RollbackService {
 
     // Schema-only / over-threshold: data was never captured.
     if (!table.dataIncluded) {
-      return { ok: false, error: 'schema-only 백업 — 데이터 복구 불가(임계 초과 또는 미캡처).' };
+      return {
+        ok: false,
+        error: 'Schema-only backup — data cannot be restored (row threshold exceeded or not captured).',
+        errorKey: 'rollback.schemaOnlyNoData',
+      };
     }
 
     // Restore data: wipe and re-insert the snapshot rows in one transaction.

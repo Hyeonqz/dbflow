@@ -22,6 +22,7 @@ export interface TestConnectionResult {
   serverVersion?: string;
   latencyMs?: number;
   error?: string;
+  errorKey?: string;
 }
 
 @Injectable()
@@ -127,7 +128,11 @@ export class TargetDatabaseService {
   async testConnection(id: string): Promise<TestConnectionResult> {
     const target = await this.getOrThrow(id);
     if (target.dbType !== DbType.MYSQL) {
-      return { success: false, error: 'MVP는 MYSQL 대상만 연결을 지원합니다.' };
+      return {
+        success: false,
+        error: 'Only MYSQL targets support connection testing.',
+        errorKey: 'targetDatabase.mysqlOnly',
+      };
     }
 
     const startedAt = Date.now();

@@ -152,7 +152,7 @@ describe('RollbackService', () => {
     await service.rollback(APPROVER, 'ex1');
 
     expect(steps[0]).toMatchObject({ filename: 'big_log', status: 'FAILED' });
-    expect(steps[0].error).toMatch(/복구 불가/);
+    expect(steps[0].error).toMatch(/cannot be restored/);
     expect(updates.at(-1)).toMatchObject({ status: 'SUCCESS' });
   });
 

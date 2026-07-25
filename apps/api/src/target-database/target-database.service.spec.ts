@@ -190,6 +190,7 @@ describe('TargetDatabaseService', () => {
       await expect(service.testConnection('db1')).resolves.toEqual({
         success: false,
         error: expect.stringContaining('MYSQL'),
+        errorKey: 'targetDatabase.mysqlOnly',
       });
     });
   });

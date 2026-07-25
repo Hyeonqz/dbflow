@@ -35,7 +35,7 @@ Phase 2b는 **throw되는 예외**를 국제화했다(전역 필터가 `{key,arg
 
 | # | 문자열 | api 위치 | 웹 표시 | 키 |
 |---|---|---|---|---|
-| 1-7 | lint 룰 설명 7개 | `apply/lint.engine.ts` `RULES[].message` | 변경요청 상세 "SQL 검토" 목록 | **기존 `LintItem.rule`** 재사용(추가 없음) |
+| 1-7 | lint 룰 설명 7개 | `apply/lint.engine.ts` `RULES[].message` | **소비자 2곳**: 변경요청 상세 "SQL 검토" 목록(`LintItem.message`) + SQL 검토 정책 페이지(`RULE_CATALOG` → `SqlReviewRuleRow.message`) | **기존 룰 키**(`LintItem.rule` / `rule.ruleKey`) 재사용(추가 없음) |
 | 8 | `MVP는 MYSQL 대상만 연결을 지원합니다.` | `target-database.service.ts` `testConnection` | 대상DB `t('testFailure',{error})` | `errorKey: 'targetDatabase.mysqlOnly'` 신설 |
 
 ### B. 영어화만 (2개 — 저장 레코드)

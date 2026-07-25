@@ -38,6 +38,14 @@ const en: Catalog = {
   'rollback.noBackup': 'No linked backup — cannot roll back.',
 
   'dryRun.mysqlOnly': 'MVP supports dry-run for MYSQL targets only.',
+
+  'applySchedule.frozen': 'Freeze period in effect: {reason} (until {endsAt})',
+  'applySchedule.outOfWindow': 'Not within an apply window.',
+  'applySchedule.outOfWindowNext': 'Not within an apply window. Next window: {day} {start}~{end}',
+  'applySchedule.windowStartAfterEnd': 'Apply window start must be before end.',
+  'applySchedule.windowNotFound': 'Apply window not found.',
+  'applySchedule.freezeStartAfterEnd': 'Freeze start must be before end.',
+  'applySchedule.freezeNotFound': 'Freeze period not found.',
 };
 
 const ko: Catalog = {
@@ -72,6 +80,14 @@ const ko: Catalog = {
   'rollback.noBackup': '연결된 백업이 없어 롤백할 수 없습니다.',
 
   'dryRun.mysqlOnly': 'MVP는 MYSQL 대상만 dry-run을 지원합니다.',
+
+  'applySchedule.frozen': '동결 기간입니다: {reason} ({endsAt}까지)',
+  'applySchedule.outOfWindow': '적용 작업창이 아닙니다.',
+  'applySchedule.outOfWindowNext': '적용 작업창이 아닙니다. 다음 작업창: {day} {start}~{end}',
+  'applySchedule.windowStartAfterEnd': '작업창 시작이 종료보다 빨라야 합니다.',
+  'applySchedule.windowNotFound': '작업창을 찾을 수 없습니다.',
+  'applySchedule.freezeStartAfterEnd': '동결 시작이 종료보다 빨라야 합니다.',
+  'applySchedule.freezeNotFound': '동결 기간을 찾을 수 없습니다.',
 };
 
 const MESSAGES: Record<Locale, Catalog> = { en, ko };

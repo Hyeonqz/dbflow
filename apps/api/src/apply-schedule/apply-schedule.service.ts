@@ -71,14 +71,19 @@ export class ApplyScheduleService {
     const status = await this.checkApplyAllowed(env, now);
     if (status.allowed) return;
     if (status.reason === 'FROZEN') {
-      throw new ConflictException(`동결 기간입니다: ${status.freeze.reason} (${fmtKst(status.freeze.endsAt)}까지)`);
+      throw new ConflictException({
+        key: 'applySchedule.frozen',
+        args: { reason: status.freeze.reason, endsAt: fmtKst(status.freeze.endsAt) },
+      });
     }
     const w = status.nextWindow;
-    throw new ConflictException(
-      w
-        ? `적용 작업창이 아닙니다. 다음 작업창: ${DAY_LABELS[w.dayOfWeek]} ${fmtMin(w.startMinute)}~${fmtMin(w.endMinute)}`
-        : '적용 작업창이 아닙니다.',
-    );
+    if (w) {
+      throw new ConflictException({
+        key: 'applySchedule.outOfWindowNext',
+        args: { day: DAY_LABELS[w.dayOfWeek], start: fmtMin(w.startMinute), end: fmtMin(w.endMinute) },
+      });
+    }
+    throw new ConflictException({ key: 'applySchedule.outOfWindow' });
   }
 
   /** 스펙 §4: freezes는 진행중·미래만(과거는 감사 잔재), timezone은 TZ 어서션 노출용. */
@@ -107,7 +112,7 @@ export class ApplyScheduleService {
     actor: AuditActorSnapshot,
   ) {
     if (dto.startMinute >= dto.endMinute) {
-      throw new BadRequestException('작업창 시작이 종료보다 빨라야 합니다.');
+      throw new BadRequestException({ key: 'applySchedule.windowStartAfterEnd' });
     }
     const row = await this.prisma.applyWindow.create({ data: dto });
     await this.audit.record({
@@ -123,7 +128,7 @@ export class ApplyScheduleService {
 
   async deleteWindow(id: string, actor: AuditActorSnapshot) {
     const row = await this.prisma.applyWindow.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException('작업창을 찾을 수 없습니다.');
+    if (!row) throw new NotFoundException({ key: 'applySchedule.windowNotFound' });
     await this.prisma.applyWindow.delete({ where: { id } });
     await this.audit.record({
       actor,
@@ -143,7 +148,7 @@ export class ApplyScheduleService {
     const startsAt = parseKst(dto.startsAt);
     const endsAt = parseKst(dto.endsAt);
     if (!(startsAt < endsAt)) {
-      throw new BadRequestException('동결 시작이 종료보다 빨라야 합니다.');
+      throw new BadRequestException({ key: 'applySchedule.freezeStartAfterEnd' });
     }
     const row = await this.prisma.freezePeriod.create({
       data: { env: dto.env, startsAt, endsAt, reason: dto.reason, createdById: actor.userId! }, // AuditActorSnapshot.userId is nullable for audit logging, but createFreeze is only ever called with an authenticated actor
@@ -161,7 +166,7 @@ export class ApplyScheduleService {
 
   async deleteFreeze(id: string, actor: AuditActorSnapshot) {
     const row = await this.prisma.freezePeriod.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException('동결 기간을 찾을 수 없습니다.');
+    if (!row) throw new NotFoundException({ key: 'applySchedule.freezeNotFound' });
     await this.prisma.freezePeriod.delete({ where: { id } });
     await this.audit.record({
       actor,

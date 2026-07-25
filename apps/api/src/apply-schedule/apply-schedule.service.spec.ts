@@ -59,14 +59,16 @@ describe('ApplyScheduleService.checkApplyAllowed', () => {
     expect((r as any).nextWindow).toMatchObject({ dayOfWeek: 2, startMinute: 120, endMinute: 240 });
   });
 
-  it('assertApplyAllowed throws 409 with 한국어 메시지', async () => {
+  it('assertApplyAllowed throws 409 with i18n key', async () => {
     const win = [{ dayOfWeek: 2, startMinute: 120, endMinute: 240, env: 'PROD' }];
     await expect(
       svc(win).assertApplyAllowed('PROD' as any, new Date(2026, 6, 21, 5, 0)),
     ).rejects.toBeInstanceOf(ConflictException);
     await expect(
       svc(win).assertApplyAllowed('PROD' as any, new Date(2026, 6, 21, 5, 0)),
-    ).rejects.toThrow(/다음 작업창: 화 02:00~04:00/);
+    ).rejects.toMatchObject({
+      response: { key: 'applySchedule.outOfWindowNext', args: { day: '화', start: '02:00', end: '04:00' } },
+    });
   });
 });
 
@@ -90,6 +92,6 @@ describe('ApplyScheduleService CRUD', () => {
     const s = new ApplyScheduleService({} as any, { record: () => Promise.resolve() } as any);
     await expect(
       s.createWindow({ env: 'PROD', dayOfWeek: 2, startMinute: 240, endMinute: 120 } as any, { userId: 'a' } as any),
-    ).rejects.toThrow(/시작이 종료보다/);
+    ).rejects.toMatchObject({ response: { key: 'applySchedule.windowStartAfterEnd' } });
   });
 });

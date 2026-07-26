@@ -3,7 +3,7 @@
 # 사전 준비(사용자): Docker Hub 계정 + 저장소 Settings에 아래 secret/variable 등록
 #   - secret  DOCKERHUB_TOKEN     : Docker Hub Access Token (Read&Write)
 #   - variable DOCKERHUB_USERNAME : Docker Hub 사용자/조직명 (= 이미지 네임스페이스)
-# 이미지: <DOCKERHUB_USERNAME>/dbflow-api, <DOCKERHUB_USERNAME>/dbflow-web
+# 이미지: <DOCKERHUB_USERNAME>/dbflow (web+api 단일 이미지)
 name: docker-publish
 
 on:
@@ -21,13 +21,6 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - app: api
-            dockerfile: apps/api/Dockerfile
-          - app: web
-            dockerfile: apps/web/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -53,7 +46,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ vars.DOCKERHUB_USERNAME }}/dbflow-${{ matrix.app }}
+          images: ${{ vars.DOCKERHUB_USERNAME }}/dbflow
           # v1.2.3 → 1.2.3, 1.2, 1 + latest. 수동 실행은 입력값 또는 'manual'.
           tags: |
             type=semver,pattern={{version}}
@@ -66,7 +59,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

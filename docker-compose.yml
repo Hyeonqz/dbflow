@@ -1,5 +1,6 @@
 # DBFlow 셀프호스팅 스택 — 사용법: cp .env.example .env && (시크릿 수정) && docker compose up -d
 # 개발 스택(docker/docker-compose.yml, ./start.sh)과 프로젝트명·볼륨·포트가 분리되어 공존 가능.
+# 단일 이미지: web+api 두 프로세스가 app 컨테이너 하나에서 뜬다(외부 공개 포트는 3000 하나).
 name: dbflow
 
 services:
@@ -22,37 +23,28 @@ services:
       timeout: 5s
       retries: 30
 
-  api:
+  app:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: Dockerfile
     env_file: .env
     environment:
       DATABASE_URL: mysql://dbflow:${MYSQL_PASSWORD}@mysql:3306/dbflow
       TZ: Asia/Seoul
+      DBFLOW_API_URL: http://127.0.0.1:3001
     depends_on:
       mysql:
         condition: service_healthy
     restart: on-failure
+    ports:
+      - "3000:3000"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # 컨테이너 내부에서 api(3001)·web(3000) 양쪽을 확인 — 하나라도 안 뜨면 unhealthy
+      test: ["CMD", "node", "-e", "Promise.all([fetch('http://127.0.0.1:3001/health'), fetch('http://127.0.0.1:3000/login')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 30s
-
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    environment:
-      DBFLOW_API_URL: http://api:3001
-    ports:
-      - "3000:3000"
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: on-failure
 
 volumes:
   dbflow_mysql_data:

@@ -56,7 +56,7 @@ Open **http://localhost:3000** and sign in with the admin credentials you set. T
 
 ### Run from prebuilt images (Docker Hub)
 
-To skip the local build and pull published images instead, use `docker-compose.hub.yml`. Set the image namespace and version in `.env` (or your environment):
+DBFlow ships as a **single image** that runs both the web and API — one pull, one port. To skip the local build and use the published image, use `docker-compose.hub.yml`. Set the image namespace and version in `.env` (or your environment):
 
 ```bash
 DBFLOW_IMAGE_NAMESPACE=<docker-hub-namespace>   # e.g. your Docker Hub username
@@ -68,7 +68,7 @@ docker compose -f docker-compose.hub.yml pull
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-Images are `linux/amd64` + `linux/arm64` and published by the `docker-publish` GitHub Actions workflow on each `v*` tag.
+The image (`<namespace>/dbflow`) is built for `linux/amd64` + `linux/arm64` and published by the `docker-publish` GitHub Actions workflow on each `v*` tag.
 
 ## Configuration
 
@@ -117,7 +117,8 @@ pnpm workspace monorepo:
 
 - `apps/api` — NestJS 10 + Prisma 5 + MySQL 8 backend
 - `apps/web` — Next.js 14 (App Router) + Tailwind CSS frontend
-- `docker/` — local development MySQL compose file (`docker-compose.yml` at the root is the full self-hosting stack)
+- `docker/` — local development MySQL compose file and the image entrypoint
+- root `Dockerfile` — the single self-hosting image (web + API); `docker-compose.yml` at the root is the full stack
 
 ## Contributing
 

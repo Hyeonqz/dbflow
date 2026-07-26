@@ -10,11 +10,13 @@ Both are solved by running a TLS-terminating reverse proxy in front of the web s
 ## Architecture
 
 ```
-client ──HTTPS──▶ reverse proxy ──HTTP──▶ web:3000 ──▶ (internal) api:3001 ──▶ mysql:3306
-        (TLS)      (nginx/Caddy)          (Next.js)      (same-origin proxy)
+                                          ┌─ app container ────────────────────┐
+client ──HTTPS──▶ reverse proxy ──HTTP──▶ │ Next.js :3000 ──▶ NestJS :3001     │ ──▶ mysql:3306
+        (TLS)      (nginx/Caddy)          │ (web)   same-origin proxy   (api)  │
+                                          └────────────────────────────────────┘
 ```
 
-The web app already proxies `/api/*` to the API internally (same-origin), and the API trusts one proxy hop (`trust proxy` is enabled) so it reads the client IP from `X-Forwarded-For`. You only add the outermost TLS layer.
+DBFlow ships as a **single image**: one container runs both the web and API processes, and only port 3000 is published. The web side proxies `/api/*` to the API over the container's loopback interface, and the API trusts one proxy hop (`trust proxy` is enabled) so it reads the client IP from `X-Forwarded-For`. You only add the outermost TLS layer.
 
 ## Option A — Caddy (simplest, automatic TLS)
 
@@ -22,7 +24,7 @@ Caddy obtains and renews Let's Encrypt certificates automatically. `Caddyfile`:
 
 ```
 dbflow.example.com {
-    reverse_proxy web:3000
+    reverse_proxy app:3000
 }
 ```
 
@@ -39,7 +41,7 @@ server {
     ssl_certificate_key /etc/ssl/private/dbflow.key;
 
     location / {
-        proxy_pass http://web:3000;
+        proxy_pass http://app:3000;
         proxy_set_header Host              $host;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;  # real client IP → audit log
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -61,7 +63,7 @@ server {
 
 - **Strong secrets** — `JWT_SECRET` and `APP_ENCRYPTION_KEY` must be real (`openssl rand -hex 32`). The API refuses to boot with default/weak values, so this is enforced, not optional.
 - **`DBFLOW_DEMO=false`** — never seed demo accounts (password `password1234`) in production. Provision the first admin via `DBFLOW_ADMIN_EMAIL` / `DBFLOW_ADMIN_PASSWORD` instead.
-- **Keep API and MySQL unpublished** — the default compose exposes only web:3000. Do not add host port mappings for `api` or `mysql`; all API traffic should flow through the same-origin web proxy behind TLS.
+- **Keep MySQL unpublished** — the default compose exposes only the app's port 3000. Do not add a host port mapping for `mysql`, and do not expose the API's 3001 out of the container; all API traffic should flow through the same-origin web proxy behind TLS.
 - **`DBFLOW_CORS_ORIGINS`** — only needed if you expose the API directly to browsers (not the case with the reverse-proxy setup above). Leave unset otherwise.
 - **Database backups** — application backups taken before each apply are stored **in** the MySQL database, so they share the `dbflow_mysql_data` volume's fate. Back up that volume (or `mysqldump`) on your own schedule; losing the volume loses both the data and its pre-apply backups.
 - **Timezone** — the backend currently assumes `Asia/Seoul` for apply-window and freeze-period evaluation (`TZ=Asia/Seoul`, set in compose). Per-deployment timezone configuration is a planned enhancement; until then, apply windows are interpreted in KST regardless of where you host.

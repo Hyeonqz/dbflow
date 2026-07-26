@@ -31,7 +31,9 @@ services:
       retries: 30
 
   app:
-    image: ${DBFLOW_IMAGE_NAMESPACE:-dbflow}/dbflow:${DBFLOW_VERSION:-latest}
+    # 기본값은 공식 이미지. 포크를 쓰려면 .env에서 DBFLOW_IMAGE_NAMESPACE를 바꾼다.
+    # DBFLOW_VERSION은 v 없는 태그(0.1.0 등) — CI가 v0.1.0 태그를 0.1.0으로 발행한다.
+    image: ${DBFLOW_IMAGE_NAMESPACE:-calixjin}/dbflow:${DBFLOW_VERSION:-latest}
     env_file: .env
     environment:
       DATABASE_URL: mysql://dbflow:${MYSQL_PASSWORD}@mysql:3306/dbflow

@@ -29,12 +29,11 @@ Run it on your own infrastructure, like Keycloak: set your secrets, point it at 
 
 ## Quick start (self-hosting)
 
-Requires Docker and Docker Compose.
+Requires Docker and Docker Compose. Nothing to build — DBFlow ships as a **single image** that runs both the web UI and the API in one container.
 
 ```bash
-git clone https://github.com/Hyeonqz/dbflow.git
-cd dbflow
-cp .env.example .env
+curl -O https://raw.githubusercontent.com/Hyeonqz/dbflow/main/docker-compose.hub.yml
+curl -o .env https://raw.githubusercontent.com/Hyeonqz/dbflow/main/.env.example
 ```
 
 Edit `.env` and set real values — the app **refuses to boot with default or weak secrets**:
@@ -47,28 +46,22 @@ openssl rand -hex 32   # → APP_ENCRYPTION_KEY
 At minimum set `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `JWT_SECRET`, `APP_ENCRYPTION_KEY`, and the initial admin (`DBFLOW_ADMIN_EMAIL` / `DBFLOW_ADMIN_PASSWORD`). Then:
 
 ```bash
-docker compose up -d
-```
-
-Open **http://localhost:3000** and sign in with the admin credentials you set. The API runs its own migrations on startup and creates the initial admin on first boot (Keycloak-style). Only the web port (3000) is published; the API and MySQL stay on the internal network.
-
-> **Evaluation only:** set `DBFLOW_DEMO=true` to seed four demo accounts (password `password1234`), sample SQL-review rules, and default approval policies. Never enable this in production.
-
-### Run from prebuilt images (Docker Hub)
-
-DBFlow ships as a **single image** that runs both the web and API — one pull, one port. To skip the local build and use the published image, use `docker-compose.hub.yml`. Set the image namespace and version in `.env` (or your environment):
-
-```bash
-DBFLOW_IMAGE_NAMESPACE=<docker-hub-namespace>   # e.g. your Docker Hub username
-DBFLOW_VERSION=v0.1.0                            # omit for :latest
-```
-
-```bash
-docker compose -f docker-compose.hub.yml pull
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-The image (`<namespace>/dbflow`) is built for `linux/amd64` + `linux/arm64` and published by the `docker-publish` GitHub Actions workflow on each `v*` tag.
+Open **http://localhost:3000** and sign in with the admin credentials you set. Migrations run automatically on startup and the initial admin is created on first boot (Keycloak-style). Only port 3000 is published; the API and MySQL stay on the container's internal network.
+
+The image [`calixjin/dbflow`](https://hub.docker.com/r/calixjin/dbflow) is built for `linux/amd64` + `linux/arm64` and published on each `v*` tag. `:latest` tracks the newest release; to pin a version, set `DBFLOW_VERSION=0.1.0` in `.env` (image tags carry no `v` prefix).
+
+> **Evaluation only:** set `DBFLOW_DEMO=true` to seed four demo accounts (password `password1234`), sample SQL-review rules, and default approval policies. Never enable this in production.
+
+### Build from source instead
+
+```bash
+git clone https://github.com/Hyeonqz/dbflow.git && cd dbflow
+cp .env.example .env          # set the same values as above
+docker compose up -d          # builds the image from the root Dockerfile
+```
 
 ## Configuration
 

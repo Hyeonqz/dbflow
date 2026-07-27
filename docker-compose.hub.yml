@@ -1,11 +1,10 @@
 # DBFlow 셀프호스팅 — Docker Hub 사전 빌드 이미지로 기동(빌드 불필요).
 # 사용법:
 #   cp .env.example .env   # 시크릿·관리자 env 수정
-#   # 아래 두 값을 .env에 추가(또는 환경변수로): 이미지 네임스페이스/버전
-#   #   DBFLOW_IMAGE_NAMESPACE=<Docker Hub 사용자/조직명>
-#   #   DBFLOW_VERSION=v0.1.0        # 미지정 시 latest
-#   docker compose -f docker-compose.hub.yml pull
 #   docker compose -f docker-compose.hub.yml up -d
+# 기본적으로 공식 이미지 calixjin/dbflow:latest 를 받는다. 바꾸려면 .env에:
+#   DBFLOW_IMAGE_NAMESPACE=<포크한 Docker Hub 계정>
+#   DBFLOW_VERSION=0.1.1          # v 없는 태그. 미지정 시 latest
 # 소스에서 빌드하려면 대신 docker-compose.yml 을 사용.
 # 개발 스택(docker/docker-compose.yml, ./start.sh)과 프로젝트명·볼륨·포트가 분리되어 공존 가능.
 name: dbflow

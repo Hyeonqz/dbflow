@@ -31,23 +31,78 @@ Run it on your own infrastructure, like Keycloak: set your secrets, point it at 
 
 Requires Docker and Docker Compose. Nothing to build — DBFlow ships as a **single image** that runs both the web UI and the API in one container.
 
-```bash
-curl -O https://raw.githubusercontent.com/Hyeonqz/dbflow/main/docker-compose.hub.yml
-curl -o .env https://raw.githubusercontent.com/Hyeonqz/dbflow/main/.env.example
+Create an empty directory and put these two files in it.
+
+**1. `docker-compose.yml`** — copy as-is:
+
+```yaml
+name: dbflow
+
+services:
+  mysql:
+    image: mysql:8.0
+    # MySQL 8 enables binlog by default; without this the append-only audit-log
+    # triggers cannot be created and the migration fails with ERROR 1419.
+    command: ["--log-bin-trust-function-creators=1"]
+    environment:
+      MYSQL_DATABASE: dbflow
+      MYSQL_USER: dbflow
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - dbflow_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  app:
+    image: calixjin/dbflow:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql://dbflow:${MYSQL_PASSWORD}@mysql:3306/dbflow
+      # Apply windows and freeze periods are evaluated in this zone.
+      TZ: ${DBFLOW_TZ:-Asia/Seoul}
+      DBFLOW_API_URL: http://127.0.0.1:3001
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: on-failure
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "Promise.all([fetch('http://127.0.0.1:3001/health'), fetch('http://127.0.0.1:3000/login')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  dbflow_mysql_data:
 ```
 
-Edit `.env` and set real values — the app **refuses to boot with default or weak secrets**:
+**2. `.env`** — the app **refuses to boot with default or weak secrets**, so generate real ones:
 
 ```bash
-openssl rand -hex 32   # → JWT_SECRET
-openssl rand -hex 32   # → APP_ENCRYPTION_KEY
+cat > .env <<EOF
+MYSQL_PASSWORD=$(openssl rand -hex 16)
+MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16)
+JWT_SECRET=$(openssl rand -hex 32)
+APP_ENCRYPTION_KEY=$(openssl rand -hex 32)
+DBFLOW_ADMIN_EMAIL=admin@example.com
+DBFLOW_ADMIN_PASSWORD=change-this-password
+# DBFLOW_TZ=Europe/Berlin   # default Asia/Seoul
+EOF
 ```
 
-At minimum set `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `JWT_SECRET`, `APP_ENCRYPTION_KEY`, and the initial admin (`DBFLOW_ADMIN_EMAIL` / `DBFLOW_ADMIN_PASSWORD`). Then:
+Change `DBFLOW_ADMIN_EMAIL` / `DBFLOW_ADMIN_PASSWORD` to what you want to sign in with — they create the first admin on first boot. Then:
 
 ```bash
-docker compose -f docker-compose.hub.yml up -d
+docker compose up -d
 ```
+
+> Prefer downloading the file? `curl -O https://raw.githubusercontent.com/Hyeonqz/dbflow/main/docker-compose.hub.yml` gets the same stack (add `-f docker-compose.hub.yml` to the compose commands).
 
 Open **http://localhost:3000** and sign in with the admin credentials you set. Migrations run automatically on startup and the initial admin is created on first boot (Keycloak-style). Only port 3000 is published; the API and MySQL stay on the container's internal network.
 

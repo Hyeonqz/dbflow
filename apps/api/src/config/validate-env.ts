@@ -52,4 +52,8 @@ if (process.env.NODE_ENV !== 'test') {
     console.error(`[dbflow] 부팅 중단 — 환경변수 오류:\n- ${errors.join('\n- ')}`);
     process.exit(1);
   }
+  // 검증 통과 후 프로세스 TZ를 배포 타임존으로 고정 — app.module 등 이후 모든 모듈의
+  // Date 파싱/판정/포맷이 이 값을 따르도록 다른 모듈이 평가되기 전에 설정한다.
+  // 빈 문자열은 미설정으로 취급(?? 대신 ||) — ''는 ICU가 Etc/Unknown으로 풀어 UTC로 조용히 새는 버그가 있었다.
+  process.env.TZ = process.env.DBFLOW_TZ || 'Asia/Seoul';
 }

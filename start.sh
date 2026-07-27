@@ -87,8 +87,11 @@ log "API 서버 기동 (:3001)..."
 TZ="${TZ:-Asia/Seoul}" DBFLOW_DEMO=true nohup pnpm --filter @dbflow/api start:dev >"$RUN_DIR/api.log" 2>&1 &
 echo $! > "$RUN_DIR/api.pid"
 
+# DBFLOW_TZ: 셸 env에 있으면 그대로, 없으면 apps/api/.env에서 읽어 web에도 동일하게 전달
+DBFLOW_TZ="${DBFLOW_TZ:-$(grep -m1 '^DBFLOW_TZ=' "$ROOT/apps/api/.env" 2>/dev/null | cut -d= -f2- | tr -d '"')}"
+
 log "Web 서버 기동 (:3000)..."
-nohup pnpm --filter @dbflow/web dev >"$RUN_DIR/web.log" 2>&1 &
+DBFLOW_TZ="$DBFLOW_TZ" nohup pnpm --filter @dbflow/web dev >"$RUN_DIR/web.log" 2>&1 &
 echo $! > "$RUN_DIR/web.pid"
 
 log "기동 완료!"

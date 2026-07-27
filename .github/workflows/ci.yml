@@ -1,0 +1,47 @@
+# PR·main push마다 테스트/타입/빌드를 자동 검증한다.
+# 외부 기여를 받기 시작하면 이 워크플로가 회귀를 막는 1차 방어선이다.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  # 같은 브랜치에서 새 커밋이 오면 진행 중인 실행을 취소해 러너 시간을 아낀다.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 의존성 설치
+        run: pnpm install --frozen-lockfile
+
+      # 테스트가 @prisma/client 타입에 의존하므로 생성이 선행돼야 한다(DB 연결은 불필요).
+      - name: Prisma 클라이언트 생성
+        run: pnpm --filter @dbflow/api exec prisma generate
+
+      - name: api 테스트
+        run: pnpm --filter @dbflow/api test
+
+      - name: web 타입 검사
+        run: pnpm --filter @dbflow/web exec tsc --noEmit
+
+      - name: web 빌드
+        run: pnpm --filter @dbflow/web build

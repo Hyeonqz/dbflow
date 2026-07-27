@@ -16,6 +16,7 @@ DB 변경요청을 ERP식 다단계 승인으로 관리하고 실제 대상 DB�
 | T1-1 | 감사 로그 UI — 필터/검색/CSV·JSON 내보내기, append-only 트리거 | — |
 | T1-2 | SQL 리뷰 정책 — 환경×규칙 심각도(DISABLED/INFO/WARN/BLOCK) 설정 | #11 |
 | T1-3 | 커스텀 승인 플로우 — 환경별 결재 인원(N명 만장일치), 결재 정책 관리 | #12 |
+| OSS | 오픈소스 전환 — 단일 이미지 셀프호스팅 · 다국어(영어 기본/한국어) · 배포 타임존 `DBFLOW_TZ` · Docker Hub 공개 | — |
 
 기반 스택: Next.js(App Router) + NestJS + Prisma + MySQL 8 / 토스 스타일 UI / 테스트 173개.
 
@@ -53,11 +54,12 @@ B1(변경 작업창·동결) ✅ PR #13, A1 부재 위임 ✅ PR #14. 다음 추
 - [ ] **e2e 테스트** — 로그인→생성→승인→적용 전 구간 자동화
 - [ ] **관측성** — 구조화 로깅, correlation id, 메트릭/대시보드
 - [ ] **대상 DB 연결 풀/타임아웃·재시도** 정책
-- [ ] **CI 파이프라인** — PR마다 test/build/lint 자동 실행
+- [x] **CI 파이프라인** — PR·main push마다 api 테스트 + web 타입검사/빌드 자동 실행 (`.github/workflows/ci.yml`)
 - [ ] **FE 인증 토큰** localStorage → httpOnly 쿠키(Server Component 전환)
 
 ### P5 — 제품화
-- [ ] 온보딩/설치 가이드, 셀프호스팅 패키징(docker compose 배포본)
+- [x] **온보딩/설치 가이드 + 셀프호스팅 패키징** — 단일 이미지(web+api) `docker compose` 배포본, README 복붙 quickstart, 프로덕션 배포 가이드(TLS·감사 IP·하드닝)
+- [x] **오픈소스 공개** — AGPL-3.0, Docker Hub `calixjin/dbflow` (v0.1.0 · v0.1.1, amd64/arm64), 태그 push 시 자동 배포
 - [ ] 요금/라이선스, 사용량 측정
 - [ ] 변경요청 템플릿·재사용, 코멘트/멘션 협업
 - [ ] 슬랙/팀즈 통합, 웹훅

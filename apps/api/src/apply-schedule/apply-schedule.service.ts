@@ -11,12 +11,12 @@ function fmtMin(m: number): string {
 }
 
 function fmtKst(d: Date): string {
-  return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' });
+  return d.toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-/** 스펙 §4 계약: 'YYYY-MM-DDTHH:mm'(KST 벽시계) → UTC instant */
+/** 스펙 §4 계약: 'YYYY-MM-DDTHH:mm'(로컬/DBFLOW_TZ 벽시계) → UTC instant */
 function parseKst(value: string): Date {
-  return new Date(`${value}:00+09:00`);
+  return new Date(`${value}:00`);
 }
 
 type WindowRow = { dayOfWeek: number; startMinute: number; endMinute: number };

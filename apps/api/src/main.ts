@@ -6,13 +6,8 @@ import { AuditExceptionFilter } from './audit/audit-exception.filter';
 import { AuditService } from './audit/audit.service';
 
 async function bootstrap() {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  if (tz !== 'Asia/Seoul') {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[dbflow] 서버 타임존이 Asia/Seoul이 아닙니다(현재: ${tz}). 적용 작업창 판정이 어긋날 수 있습니다 — TZ=Asia/Seoul로 기동하세요.`,
-    );
-  }
+  // 프로세스 TZ를 배포 타임존으로 고정 — 이후 모든 Date 파싱/판정/포맷이 따라온다.
+  process.env.TZ = process.env.DBFLOW_TZ ?? 'Asia/Seoul';
 
   const app = await NestFactory.create(AppModule);
   // web 프록시/리버스 프록시가 설정한 X-Forwarded-For를 신뢰해 req.ip가 실제 클라이언트 IP를 읽도록

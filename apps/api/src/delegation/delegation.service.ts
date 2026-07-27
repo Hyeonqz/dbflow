@@ -5,7 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuditActorSnapshot } from '../audit/audit.types';
 
 function parseKst(value: string): Date {
-  return new Date(`${value}:00+09:00`);
+  return new Date(`${value}:00`);
 }
 
 @Injectable()

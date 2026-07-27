@@ -22,4 +22,13 @@ describe('validateEnv', () => {
     expect(validateEnv({ ...VALID, APP_ENCRYPTION_KEY: 'zz'.repeat(32) })).not.toEqual([]);
     expect(validateEnv({ ...VALID, APP_ENCRYPTION_KEY: 'ab'.repeat(16) })).not.toEqual([]);
   });
+
+  it('DBFLOW_TZ가 유효한 IANA 존이면 통과하고, 미설정도 통과한다', () => {
+    expect(validateEnv({ ...VALID, DBFLOW_TZ: 'Europe/Berlin' })).toEqual([]);
+    expect(validateEnv({ ...VALID, DBFLOW_TZ: undefined })).toEqual([]);
+  });
+
+  it('DBFLOW_TZ가 잘못된 값이면 거부한다', () => {
+    expect(validateEnv({ ...VALID, DBFLOW_TZ: 'Seoul/Asia' })).not.toEqual([]);
+  });
 });

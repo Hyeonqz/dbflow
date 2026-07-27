@@ -32,6 +32,15 @@ export function validateEnv(env: NodeJS.ProcessEnv = process.env): string[] {
     );
   }
 
+  const tz = env.DBFLOW_TZ;
+  if (tz) {
+    try {
+      new Intl.DateTimeFormat(undefined, { timeZone: tz });
+    } catch {
+      errors.push(`DBFLOW_TZ가 유효한 IANA 타임존이 아닙니다: ${tz}`);
+    }
+  }
+
   return errors;
 }
 

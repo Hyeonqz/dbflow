@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useLocale, useTimeZone, useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import {
   createApplyWindow,
@@ -13,7 +13,7 @@ import {
   type TargetEnv,
 } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
-import { formatKstDateTime } from '@/lib/format';
+import { formatBusinessDateTime } from '@/lib/format';
 import type { Locale } from '@/i18n/config';
 
 const ENV_OPTIONS: TargetEnv[] = ['DEV', 'STAGING', 'PROD'];
@@ -31,6 +31,11 @@ export default function ApplySchedulePage() {
   const { user, ready } = useUser();
   const [schedule, setSchedule] = useState<ApplySchedule | null>(null);
   const [error, setError] = useState('');
+  // ponytail: null until mount to avoid SSR/browser timezone hydration mismatch
+  const [browserTimeZone, setBrowserTimeZone] = useState<string | null>(null);
+  useEffect(() => {
+    setBrowserTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  }, []);
 
   const load = useCallback(() => {
     return getApplySchedule()
@@ -62,9 +67,9 @@ export default function ApplySchedulePage() {
         <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-300">{error}</p>
       )}
 
-      {schedule && schedule.timezone !== 'Asia/Seoul' && (
+      {schedule && browserTimeZone && schedule.timezone !== browserTimeZone && (
         <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-          {t('timezoneMismatch', { timezone: schedule.timezone })}
+          {t('timezoneNotice', { timezone: schedule.timezone, browserTimezone: browserTimeZone })}
         </p>
       )}
 
@@ -228,6 +233,8 @@ function FreezesSection({
   const tc = useTranslations('common');
   const fid = useId();
   const locale = useLocale() as Locale;
+  // next-intl request config always sets timeZone (see i18n/request.ts); non-null by construction.
+  const timeZone = useTimeZone()!;
   const [env, setEnv] = useState<TargetEnv>('DEV');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
@@ -291,7 +298,7 @@ function FreezesSection({
               {schedule.freezes.map((f) => (
                 <tr key={f.id} className="bg-card">
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-ink">{f.env}</td>
-                  <td className="px-4 py-3 tabular-nums text-ink">{formatKstDateTime(f.startsAt, locale)} ~ {formatKstDateTime(f.endsAt, locale)}</td>
+                  <td className="px-4 py-3 tabular-nums text-ink">{formatBusinessDateTime(f.startsAt, locale, timeZone)} ~ {formatBusinessDateTime(f.endsAt, locale, timeZone)}</td>
                   <td className="px-4 py-3 text-muted">{f.reason}</td>
                   <td className="px-4 py-3 text-muted">{f.createdBy?.name ?? '-'}</td>
                   <td className="px-4 py-3 text-right">

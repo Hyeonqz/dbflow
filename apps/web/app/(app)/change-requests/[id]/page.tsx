@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useLocale, useTimeZone, useTranslations } from 'next-intl';
 import { useCurrentUser, type User } from '@/lib/auth';
 import {
   applyChangeRequest,
@@ -38,7 +38,7 @@ import {
   SqlTypeBadge,
   StatusBadge,
 } from '@/components/badges';
-import { formatDateTime, formatKstDateTime } from '@/lib/format';
+import { formatBusinessDateTime, formatDateTime } from '@/lib/format';
 import { PageHeader } from '@/components/page-header';
 import type { Locale } from '@/i18n/config';
 
@@ -598,6 +598,8 @@ function ApplyPanel({
   onApplied: () => Promise<unknown>;
 }) {
   const locale = useLocale() as Locale;
+  // next-intl request config always sets timeZone (see i18n/request.ts); non-null by construction.
+  const timeZone = useTimeZone()!;
   const t = useTranslations('changeRequestDetail');
   const ts = useTranslations('serverMessages');
   const [dbs, setDbs] = useState<TargetDatabase[] | null>(null);
@@ -766,7 +768,7 @@ function ApplyPanel({
               {'🧊 '}
               {t('freezeActive', {
                 reason: schedule.freeze?.reason ?? '',
-                until: formatKstDateTime(schedule.freeze!.endsAt, locale),
+                until: formatBusinessDateTime(schedule.freeze!.endsAt, locale, timeZone),
               })}
             </div>
           )}

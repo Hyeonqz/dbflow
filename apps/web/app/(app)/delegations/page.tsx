@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useLocale, useTimeZone, useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
 import type { User } from '@/lib/auth';
 import type { Locale } from '@/i18n/config';
@@ -14,7 +14,7 @@ import {
   type UserSummary,
 } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
-import { formatKstDateTime } from '@/lib/format';
+import { formatBusinessDateTime } from '@/lib/format';
 
 const ACCESS_ROLES = ['REVIEWER', 'APPROVER', 'ADMIN'];
 
@@ -25,6 +25,8 @@ export default function DelegationsPage() {
   const t = useTranslations('delegations');
   const tCommon = useTranslations('common');
   const locale = useLocale() as Locale;
+  // next-intl request config always sets timeZone (see i18n/request.ts); non-null by construction.
+  const timeZone = useTimeZone()!;
   const { user, ready } = useUser();
   const [rows, setRows] = useState<DelegationRow[] | null>(null);
   const [error, setError] = useState('');
@@ -95,7 +97,7 @@ export default function DelegationsPage() {
                 <tr key={r.id} className="bg-card">
                   <td className="px-4 py-3 text-ink">{r.delegator.name ?? '-'}</td>
                   <td className="px-4 py-3 text-ink">{r.delegate.name ?? '-'}</td>
-                  <td className="px-4 py-3 tabular-nums text-ink">{formatKstDateTime(r.startsAt, locale)} ~ {formatKstDateTime(r.endsAt, locale)}</td>
+                  <td className="px-4 py-3 tabular-nums text-ink">{formatBusinessDateTime(r.startsAt, locale, timeZone)} ~ {formatBusinessDateTime(r.endsAt, locale, timeZone)}</td>
                   <td className="px-4 py-3 text-muted">{r.reason ?? '-'}</td>
                   <td className="px-4 py-3 text-muted">{r.createdBy?.name ?? '-'}</td>
                   <td className="px-4 py-3 text-right">

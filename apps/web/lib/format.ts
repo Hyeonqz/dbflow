@@ -13,8 +13,8 @@ export function formatDateTime(iso: string, locale: Locale = 'en'): string {
   }).format(d);
 }
 
-/** 비즈니스 시각(적용 작업창·동결 등) — 언어와 무관하게 항상 Asia/Seoul. */
-export function formatKstDateTime(iso: string, locale: Locale = 'en'): string {
+/** 비즈니스 시각(적용 작업창·동결 등) — 배포 타임존(DBFLOW_TZ, next-intl useTimeZone()) 기준으로 고정 표시. */
+export function formatBusinessDateTime(iso: string, locale: Locale = 'en', timeZone: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return new Intl.DateTimeFormat(locale === 'ko' ? 'ko-KR' : 'en-US', {
@@ -23,6 +23,6 @@ export function formatKstDateTime(iso: string, locale: Locale = 'en'): string {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Asia/Seoul',
+    timeZone,
   }).format(d);
 }

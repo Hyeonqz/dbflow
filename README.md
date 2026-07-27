@@ -78,7 +78,7 @@ All configuration is via environment variables — see `.env.example` for the an
 | `DBFLOW_CORS_ORIGINS` | no | Comma-separated allowed origins if the API is exposed directly. |
 | `BACKUP_MAX_ROWS` | no | Max rows per table snapshotted in a pre-apply backup (schema-only above this). Default `100000`. |
 | `PORT` | no | API port (default `3001`). |
-| `TZ` | no | Server timezone; apply-window evaluation assumes `Asia/Seoul`. |
+| `DBFLOW_TZ` | no | Timezone (IANA name) used to evaluate apply windows and freeze periods, and to display business times. Default `Asia/Seoul`; an invalid name refuses to boot. |
 
 ## Production deployment
 

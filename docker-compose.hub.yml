@@ -37,7 +37,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: mysql://dbflow:${MYSQL_PASSWORD}@mysql:3306/dbflow
-      TZ: Asia/Seoul
+      # 적용 작업창·동결 판정 기준 타임존. .env의 DBFLOW_TZ로 바꾼다(IANA 존 이름).
+      TZ: ${DBFLOW_TZ:-Asia/Seoul}
       DBFLOW_API_URL: http://127.0.0.1:3001
     depends_on:
       mysql:

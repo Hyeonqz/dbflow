@@ -21,9 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 버전을 지정하지 않는다 — 루트 package.json의 "packageManager": "pnpm@9.0.0"을
+      # 단일 소스로 삼아야 로컬과 CI가 같은 pnpm을 쓴다(둘 다 지정하면 action이 거부).
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:

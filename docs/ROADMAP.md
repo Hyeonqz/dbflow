@@ -28,6 +28,9 @@ DB 변경요청을 ERP식 다단계 승인으로 관리하고 실제 대상 DB�
 다음 기능 후보와 추천 3선은 **[roadmap-tier2-candidates.md](./roadmap-tier2-candidates.md)** 참고.
 B1(변경 작업창·동결) ✅ PR #13, A1 부재 위임 ✅ PR #14. 다음 추천: ① A1 잔여(에스컬레이션·SLA + 알림 발송 인프라) → ② 긴급 변경 fast-path + 사후 검토(PIR) → ③ 롤백 계획 필수화.
 
+**UX 중심 후보**(실제 제품·사용자 경험 리서치, 2026-07-27)는 **[roadmap-ux-candidates.md](./roadmap-ux-candidates.md)** 참고.
+추천: ⓪ CR 상세 에러 표시 버그픽스 → ① 결재 인박스 슬라이스(대기 큐·배지·재검토 요청·위임 표시) → ② 리비전 diff+승인 무효화 → ③ 에디터·목록 에르고노믹스 팩.
+
 ---
 
 ## 📋 TODO (구 목록 — Tier-2 후보 문서로 재정리 중)

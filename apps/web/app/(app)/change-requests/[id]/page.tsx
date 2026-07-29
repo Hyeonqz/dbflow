@@ -58,7 +58,10 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
   const load = useCallback(() => {
     return getChangeRequest(id)
-      .then(setCr)
+      .then((next) => {
+        setCr(next);
+        setError(''); // 이전 실패 배너가 남지 않도록 성공 시 반드시 지운다
+      })
       .catch((err: Error) => setError(err.message));
   }, [id]);
 
@@ -87,7 +90,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
   return (
     <>
-      {!cr && <InlineError message={error} />}
+      <InlineError message={error} />
 
       {!error && !cr && <p className="text-muted">{t('loading')}</p>}
 

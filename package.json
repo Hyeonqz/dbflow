@@ -6,6 +6,7 @@
   "scripts": {
     "api:dev": "pnpm --filter @dbflow/api start:dev",
     "web:dev": "pnpm --filter @dbflow/web dev",
-    "api:test": "pnpm --filter @dbflow/api test"
+    "api:test": "pnpm --filter @dbflow/api test",
+    "web:test": "pnpm --filter @dbflow/web test"
   }
 }

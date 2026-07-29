@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTimeZone, useTranslations } from 'next-intl';
 import { useCurrentUser, type User } from '@/lib/auth';
 import {
@@ -39,6 +39,7 @@ import {
   StatusBadge,
 } from '@/components/badges';
 import { formatBusinessDateTime, formatDateTime } from '@/lib/format';
+import { InlineError } from '@/components/inline-error';
 import { PageHeader } from '@/components/page-header';
 import type { Locale } from '@/i18n/config';
 
@@ -54,24 +55,44 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
   const [executions, setExecutions] = useState<Execution[] | null>(null);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [error, setError] = useState('');
+  const [executionsNotice, setExecutionsNotice] = useState('');
+  const [backupsNotice, setBackupsNotice] = useState('');
 
   const load = useCallback(() => {
     return getChangeRequest(id)
-      .then(setCr)
+      .then((next) => {
+        setCr(next);
+        setError(''); // 이전 실패 배너가 남지 않도록 성공 시 반드시 지운다
+      })
       .catch((err: Error) => setError(err.message));
   }, [id]);
 
   const loadExecutions = useCallback(() => {
     return listExecutions(id)
-      .then(setExecutions)
-      .catch(() => setExecutions([])); // 이력 조회 실패는 본문 흐름을 막지 않음
-  }, [id]);
+      .then((rows) => {
+        setExecutions(rows);
+        setExecutionsNotice('');
+      })
+      .catch(() => {
+        // 조회 실패를 빈 배열로 삼키면 "적용된 적 없음"으로 보인다 — 감사 제품에서 최악의 거짓 음성.
+        setExecutions([]);
+        setExecutionsNotice(t('executionsUnavailable'));
+      });
+  }, [id, t]);
 
   const loadBackups = useCallback(() => {
     return listBackups(id)
-      .then(setBackups)
-      .catch(() => setBackups([])); // 권한/조회 실패는 본문 흐름을 막지 않음
-  }, [id]);
+      .then((rows) => {
+        setBackups(rows);
+        setBackupsNotice('');
+      })
+      .catch((err: unknown) => {
+        setBackups([]);
+        // REVIEWER·ADMIN은 백업 조회 권한이 없어 매 조회마다 403을 받는다(정상 경로).
+        // 그들은 롤백 버튼도 볼 수 없으므로 알리면 소음이다. 그 외 실패만 알린다.
+        setBackupsNotice(err instanceof ApiError && err.status === 403 ? '' : t('backupsUnavailable'));
+      });
+  }, [id, t]);
 
   useEffect(() => {
     if (!ready) return;
@@ -86,11 +107,9 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
   return (
     <>
-      {error && !cr && (
-        <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-300">
-          {error}
-        </p>
-      )}
+      {/* cr이 이미 있는데 에러가 났다면 갱신만 실패한 것이다. 원시 에러만 보여주면
+          "내 승인이 실패했다"로 읽혀 사용자가 다시 눌러 중복 결재를 만든다. */}
+      <InlineError message={error ? (cr ? `${t('staleContent')} ${error}` : error) : ''} />
 
       {!error && !cr && <p className="text-muted">{t('loading')}</p>}
 
@@ -144,21 +163,15 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
             {/* Right: actions + apply + history + status history */}
             <div className="flex flex-col gap-6">
-              <AssigneePanel cr={cr} user={user} onError={setError} onDone={load} />
+              <AssigneePanel cr={cr} user={user} onDone={load} />
 
               <ApprovalProgressPanel cr={cr} />
 
-              <ActionPanel
-                cr={cr}
-                user={user}
-                onError={setError}
-                onDone={load}
-              />
+              <ActionPanel cr={cr} user={user} onDone={load} />
 
               <ApplyPanel
                 cr={cr}
                 user={user}
-                onError={setError}
                 onApplied={async () => {
                   await Promise.all([load(), loadExecutions(), loadBackups()]);
                 }}
@@ -168,7 +181,8 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
                 executions={executions}
                 backups={backups}
                 canRollback={applyRoleAllowed(cr, user)}
-                onError={setError}
+                executionsNotice={executionsNotice}
+                backupsNotice={backupsNotice}
                 onRolledBack={async () => {
                   await Promise.all([load(), loadExecutions(), loadBackups()]);
                 }}
@@ -213,12 +227,10 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 function ActionPanel({
   cr,
   user,
-  onError,
   onDone,
 }: {
   cr: ChangeRequestDetail;
   user: User;
-  onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
@@ -237,15 +249,12 @@ function ActionPanel({
 
   return (
     <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
-      {canSubmit && (
-        <SubmitAction id={cr.id} onError={onError} onDone={onDone} />
-      )}
+      {canSubmit && <SubmitAction id={cr.id} onDone={onDone} />}
       {canReview && (
         <DecisionAction
           title={t('reviewTitle')}
           badge={isReviewDelegate ? <DelegateBadge label={t('delegateReview')} /> : null}
           run={(decision, comment) => reviewChangeRequest(cr.id, decision, comment)}
-          onError={onError}
           onDone={onDone}
         />
       )}
@@ -254,7 +263,6 @@ function ActionPanel({
           title={t('finalApprovalTitle')}
           badge={isApproveDelegate ? <DelegateBadge label={t('delegateApproval')} /> : null}
           run={(decision, comment) => approveChangeRequest(cr.id, decision, comment)}
-          onError={onError}
           onDone={onDone}
         />
       )}
@@ -339,12 +347,10 @@ function ApprovalProgressPanel({ cr }: { cr: ChangeRequestDetail }) {
 function AssigneePanel({
   cr,
   user,
-  onError,
   onDone,
 }: {
   cr: ChangeRequestDetail;
   user: User;
-  onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
@@ -357,6 +363,7 @@ function AssigneePanel({
     cr.approvers.length > 0 ? cr.approvers.map((a) => a.userId) : [''],
   );
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!canReassign) return;
@@ -392,7 +399,7 @@ function AssigneePanel({
 
   async function reassign() {
     setBusy(true);
-    onError('');
+    setError('');
     try {
       await setAssignees(cr.id, {
         reviewerId: reviewerId || undefined,
@@ -400,7 +407,7 @@ function AssigneePanel({
       });
       await onDone();
     } catch (err) {
-      onError((err as Error).message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -449,40 +456,43 @@ function AssigneePanel({
           {busy ? t('changing') : t('changeAssignment')}
         </button>
       </div>
+      <InlineError message={error} className="mt-3" />
     </section>
   );
 }
 
 function SubmitAction({
   id,
-  onError,
   onDone,
 }: {
   id: string;
-  onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   async function submit() {
     setBusy(true);
-    onError('');
+    setError('');
     try {
       await submitChangeRequest(id);
       await onDone();
     } catch (err) {
-      onError((err as Error).message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   }
   return (
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-sm text-muted">{t('submitNotice')}</p>
-      <button onClick={submit} disabled={busy} className="btn-primary shrink-0 px-5 py-2.5 text-sm">
-        {busy ? t('submitting') : t('requestReview')}
-      </button>
-    </div>
+    <section>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted">{t('submitNotice')}</p>
+        <button onClick={submit} disabled={busy} className="btn-primary shrink-0 px-5 py-2.5 text-sm">
+          {busy ? t('submitting') : t('requestReview')}
+        </button>
+      </div>
+      <InlineError message={error} className="mt-3" />
+    </section>
   );
 }
 
@@ -490,23 +500,29 @@ function DecisionAction({
   title,
   badge,
   run,
-  onError,
   onDone,
 }: {
   title: string;
   badge?: React.ReactNode;
   run: (decision: ReviewDecision, comment: string) => Promise<unknown>;
-  onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState<ReviewDecision | null>(null);
+  const [error, setError] = useState('');
+  // 검증 실패일 때만 textarea를 aria로 연결한다. API 실패는 필드 잘못이 아니다.
+  const [invalid, setInvalid] = useState(false);
+  const errorId = useId();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   async function act(decision: ReviewDecision) {
-    onError('');
+    setError('');
+    setInvalid(false);
     if (decision === 'REJECT' && !comment.trim()) {
-      onError(t('rejectReasonRequired'));
+      setError(t('rejectReasonRequired'));
+      setInvalid(true);
+      textareaRef.current?.focus(); // WCAG 3.3.1 — 문제가 된 필드를 식별시킨다
       return;
     }
     setBusy(decision);
@@ -515,25 +531,36 @@ function DecisionAction({
       setComment('');
       await onDone();
     } catch (err) {
-      onError((err as Error).message);
+      setError((err as Error).message);
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <div>
+    <section>
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-semibold">{title}</h2>
         {badge}
       </div>
       <textarea
+        ref={textareaRef}
         aria-label={t('reviewCommentAriaLabel')}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? errorId : undefined}
         className="mt-3 w-full resize-y rounded-2xl bg-subtle px-4 py-3 text-sm outline-none ring-1 ring-border-strong focus:ring-primary"
         placeholder={t('commentPlaceholder')}
         value={comment}
-        onChange={(e) => setComment(e.target.value)}
+        onChange={(e) => {
+          setComment(e.target.value);
+          // 검증 에러만 입력 즉시 지운다. API 실패는 실제 서버 결과이므로 재시도까지 남긴다.
+          if (invalid) {
+            setError('');
+            setInvalid(false);
+          }
+        }}
       />
+      <InlineError message={error} id={errorId} className="mt-3" />
       <div className="mt-3 flex gap-3">
         <button
           onClick={() => act('APPROVE')}
@@ -550,7 +577,7 @@ function DecisionAction({
           {busy === 'REJECT' ? t('processing') : t('reject')}
         </button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -589,12 +616,10 @@ function applyStatusGate(cr: ChangeRequestDetail): { allowed: boolean; reasonKey
 function ApplyPanel({
   cr,
   user,
-  onError,
   onApplied,
 }: {
   cr: ChangeRequestDetail;
   user: User;
-  onError: (msg: string) => void;
   onApplied: () => Promise<unknown>;
 }) {
   const locale = useLocale() as Locale;
@@ -610,8 +635,12 @@ function ApplyPanel({
 
   // 안전장치(Plan 5)
   const [lint, setLint] = useState<LintResult | null>(null);
+  const [lintNotice, setLintNotice] = useState('');
+  const [lintRetrying, setLintRetrying] = useState(false);
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
   const [dryRunning, setDryRunning] = useState(false);
+  const [dryRunError, setDryRunError] = useState('');
+  const [applyError, setApplyError] = useState('');
 
   // 적용 작업창/동결 상태(Plan 6) — 배너는 보조 표시, 실제 강제는 서버 게이트
   const [schedule, setSchedule] = useState<ScheduleStatus | null>(null);
@@ -643,16 +672,38 @@ function ApplyPanel({
   }, [roleAllowed]);
 
   // 적용 전 위험 SQL 린트(대상 DB와 무관, CR 파일 정적 분석). 환경정책 반영된 severity.
-  useEffect(() => {
-    if (!roleAllowed) return;
+  // 실패 시 STAGING/PROD는 적용을 막으므로(fail-closed) 재시도 수단이 반드시 필요하다.
+  const loadLint = useCallback(() => {
     let active = true;
+    // lintNotice를 여기서 지우지 않는다 — 지우면 재시도 클릭 즉시 알림과 버튼이 함께
+    // 사라져 요청이 끝날 때까지 Apply만 비활성인 채 설명 없는 화면이 된다. 대신
+    // lintRetrying으로 버튼 라벨만 바꾸고, 알림은 결과가 온 뒤에만 갱신한다.
+    setLintRetrying(true);
     lintChangeRequest(cr.id)
-      .then((res) => active && setLint(res))
-      .catch(() => active && setLint(null)); // 린트 실패는 적용을 막지 않되 표시만 생략
+      .then((res) => {
+        if (!active) return;
+        setLint(res);
+        setLintNotice('');
+      })
+      .catch(() => {
+        if (!active) return;
+        setLint(null);
+        // DEV는 적용이 막히지 않으므로 "적용할 수 없습니다"라고 말하면 안 된다.
+        setLintNotice(t(cr.targetEnv === 'DEV' ? 'lintUnavailableDev' : 'lintUnavailable'));
+      })
+      .finally(() => {
+        if (!active) return;
+        setLintRetrying(false);
+      });
     return () => {
       active = false;
     };
-  }, [roleAllowed, cr.id]);
+  }, [cr.id, cr.targetEnv, t]);
+
+  useEffect(() => {
+    if (!roleAllowed) return;
+    return loadLint();
+  }, [roleAllowed, loadLint]);
 
   const matching = useMemo(
     () => (dbs ?? []).filter((d) => d.env === cr.targetEnv),
@@ -662,16 +713,20 @@ function ApplyPanel({
   if (!roleAllowed) return null;
 
   const lintBlocked = lint?.maxSeverity === 'BLOCK';
+  // DEV는 정책이 없을 때만 서버가 BLOCK→WARN으로 강등한다(기본값, apps/api/src/apply/lint.engine.ts:89).
+  // DEV에 BLOCK 정책이 명시적으로 저장돼 있으면 서버 게이트(apply.service.ts의 hasBlock, 환경 무관)가
+  // DEV도 막는다 — 그 경우 이 클라이언트 게이트는 의도적으로 느슨하며, 조회 실패 시 서버가 최종 방어선이다.
+  const lintGateRequired = cr.targetEnv !== 'DEV';
 
   async function runDryRun() {
     if (!selectedId) return;
     setDryRunning(true);
     setDryRun(null);
-    onError('');
+    setDryRunError('');
     try {
       setDryRun(await dryRunChangeRequest(cr.id, selectedId));
     } catch (err) {
-      onError((err as Error).message);
+      setDryRunError((err as Error).message);
     } finally {
       setDryRunning(false);
     }
@@ -680,14 +735,14 @@ function ApplyPanel({
   async function apply() {
     if (!selectedId) return;
     setBusy(true);
-    onError('');
+    setApplyError('');
     setResult(null);
     try {
       const exec = await applyChangeRequest(cr.id, selectedId);
       setResult({ status: exec.status });
       await onApplied();
     } catch (err) {
-      onError((err as Error).message);
+      setApplyError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -699,6 +754,7 @@ function ApplyPanel({
     !busy &&
     matching.length > 0 &&
     !lintBlocked &&
+    !(lintGateRequired && lint === null) &&
     (schedule === null || schedule.allowed);
 
   return (
@@ -743,17 +799,28 @@ function ApplyPanel({
         </div>
       )}
 
+      {lintNotice && (
+        <div className="mt-3">
+          <InlineError message={lintNotice} tone="notice" />
+          <div className="mt-2 flex justify-end">
+            <button
+              onClick={loadLint}
+              disabled={lintRetrying}
+              className="focusable rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
+            >
+              {lintRetrying ? t('checking') : t('lintRetry')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {!gate.allowed && gate.reasonKey && (
         <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
           {t(gate.reasonKey)}
         </p>
       )}
 
-      {dbNotice && (
-        <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-          {dbNotice}
-        </p>
-      )}
+      <InlineError message={dbNotice} tone="notice" className="mt-3" />
 
       {gate.allowed && dbs !== null && matching.length === 0 && !dbNotice && (
         <p className="mt-3 rounded-2xl bg-subtle px-4 py-3 text-sm text-muted">
@@ -816,6 +883,7 @@ function ApplyPanel({
             running={dryRunning}
             disabled={!selectedId || dryRunning}
             onRun={runDryRun}
+            error={dryRunError}
           />
 
           <div className="mt-4 flex items-center justify-end gap-3">
@@ -823,6 +891,7 @@ function ApplyPanel({
               {busy ? t('applying') : t('applyTitle')}
             </button>
           </div>
+          <InlineError message={applyError} className="mt-3" />
         </>
       )}
 
@@ -847,11 +916,13 @@ function DryRunSection({
   running,
   disabled,
   onRun,
+  error,
 }: {
   result: DryRunResult | null;
   running: boolean;
   disabled: boolean;
   onRun: () => void;
+  error?: string;
 }) {
   const t = useTranslations('changeRequestDetail');
   return (
@@ -869,6 +940,8 @@ function DryRunSection({
           {running ? t('checking') : t('runDryRun')}
         </button>
       </div>
+
+      <InlineError message={error} className="mt-3" />
 
       {result && (
         <ul className="mt-3 space-y-2">
@@ -918,31 +991,46 @@ function ExecutionHistory({
   executions,
   backups,
   canRollback,
-  onError,
+  executionsNotice,
+  backupsNotice,
   onRolledBack,
 }: {
   executions: Execution[] | null;
   backups: Backup[];
   canRollback: boolean;
-  onError: (msg: string) => void;
+  executionsNotice: string;
+  backupsNotice: string;
   onRolledBack: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
-  if (executions === null || executions.length === 0) return null;
+  const rows = executions ?? [];
+  // 알림이 있으면 목록이 비어도 섹션을 렌더해야 알림이 표시될 자리가 생긴다.
+  // 단, backupsNotice는 rows.length===0이면 아래에서 절대 표시되지 않으므로(위 message 조건 참고)
+  // 그것만으로는 섹션을 렌더할 이유가 안 된다 — 안 그러면 빈 "Apply history (0)" 제목만 남는다.
+  if (rows.length === 0 && !executionsNotice) return null;
 
   const backupsById = new Map(backups.map((b) => [b.id, b]));
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-ink">{t('applyHistory', { count: executions.length })}</h2>
+      <h2 className="text-base font-semibold text-ink">
+        {executionsNotice ? t('applyHistoryTitle') : t('applyHistory', { count: rows.length })}
+      </h2>
+      {/* 이력을 못 불러온 상황에서 백업 알림은 중복이고, 롤백할 이력 자체가 없어 무의미하다.
+          canRollback이 false거나(그 역할은 롤백 버튼 자체를 볼 수 없다) 실행 이력이 0건이면
+          (롤백 대상이 없다) 백업 알림도 보여줄 이유가 없다. */}
+      <InlineError
+        message={executionsNotice || (canRollback && rows.length > 0 ? backupsNotice : '')}
+        tone="notice"
+        className="mt-3"
+      />
       <div className="mt-3 space-y-4">
-        {executions.map((exec) => (
+        {rows.map((exec) => (
           <ExecutionCard
             key={exec.id}
             exec={exec}
             backup={exec.backupId ? backupsById.get(exec.backupId) : undefined}
             canRollback={canRollback}
-            onError={onError}
             onRolledBack={onRolledBack}
           />
         ))}
@@ -955,18 +1043,17 @@ function ExecutionCard({
   exec,
   backup,
   canRollback,
-  onError,
   onRolledBack,
 }: {
   exec: Execution;
   backup: Backup | undefined;
   canRollback: boolean;
-  onError: (msg: string) => void;
   onRolledBack: () => Promise<unknown>;
 }) {
   const locale = useLocale() as Locale;
   const t = useTranslations('changeRequestDetail');
   const [rollingBack, setRollingBack] = useState(false);
+  const [error, setError] = useState('');
   const isApply = (exec.kind ?? 'APPLY') === 'APPLY';
   const restorable = isBackupRestorable(backup);
   // Rollback exposure condition: APPLY execution + restorable backup + permission
@@ -977,12 +1064,15 @@ function ExecutionCard({
       return;
     }
     setRollingBack(true);
-    onError('');
+    setError('');
     try {
       await rollbackExecution(exec.id);
       await onRolledBack();
     } catch (err) {
-      onError((err as Error).message);
+      setError((err as Error).message);
+    } finally {
+      // 성공 경로에도 반드시 리셋해야 한다. 카드는 exec.id 키로 그대로 마운트된 채 남으므로
+      // 리셋하지 않으면 버튼이 "롤백 중…" 라벨로 영구 비활성이 된다.
       setRollingBack(false);
     }
   }
@@ -1045,17 +1135,18 @@ function ExecutionCard({
       </ol>
 
       {showRollback && (
-        <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3">
-          <p className="text-xs text-muted">
-            {t('rollbackDesc')}
-          </p>
-          <button
-            onClick={rollback}
-            disabled={rollingBack}
-            className="focusable shrink-0 rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:ring-red-500/30 dark:hover:bg-red-500/15"
-          >
-            {rollingBack ? t('rollingBack') : t('rollback')}
-          </button>
+        <div className="border-t border-border bg-card px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted">{t('rollbackDesc')}</p>
+            <button
+              onClick={rollback}
+              disabled={rollingBack}
+              className="focusable shrink-0 rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:ring-red-500/30 dark:hover:bg-red-500/15"
+            >
+              {rollingBack ? t('rollingBack') : t('rollback')}
+            </button>
+          </div>
+          <InlineError message={error} className="mt-3" />
         </div>
       )}
     </article>

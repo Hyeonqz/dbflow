@@ -33,15 +33,22 @@ export class ApiError extends Error {
  * - 에러 응답 본문의 message를 최대한 살려서 ApiError로 변환
  */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept-Language': currentLocale(),
-      ...authHeaders(),
-      ...init?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept-Language': currentLocale(),
+        ...authHeaders(),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    // 네트워크 끊김/DNS/CORS는 원시 TypeError("Failed to fetch")로 온다.
+    // 그대로 두면 미번역 영어가 화면에 노출된다. status 0은 "응답 없음"을 뜻한다.
+    throw new ApiError(0, ct('networkError'));
+  }
 
   if (res.status === 401 && typeof window !== 'undefined') {
     localStorage.removeItem('accessToken');
@@ -71,11 +78,16 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 // Auth
 // ---------------------------------------------------------------------------
 export async function login(email: string, password: string) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept-Language': currentLocale() },
-    body: JSON.stringify({ email, password }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept-Language': currentLocale() },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new ApiError(0, ct('networkError'));
+  }
   if (!res.ok) throw new Error(ct('loginFailed'));
   return res.json() as Promise<{
     accessToken: string;

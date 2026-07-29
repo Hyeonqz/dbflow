@@ -143,19 +143,27 @@ lint?.maxSeverity === 'BLOCK'`(664행)에서 `null`은 `false`가 된다. `canAp
 활성화되고** 위험 SQL 패널(710행~)은 아무것도 렌더하지 않는다. 운영자는 초록불 버튼과
 무경고 화면을 본다. 이는 단순한 정보 누락이 아니라 **적극적인 거짓 안전 신호**다.
 
-**그러나 DEV에는 적용하지 않는다.** 서버가 `apps/api/src/apply/lint.engine.ts:89`에서
-`if (env === TargetEnv.DEV && base === 'BLOCK') return 'WARN'`으로 강등하므로 **DEV에서는
-`maxSeverity`가 BLOCK이 될 수 없고**, `apply.service.ts`의 적용 게이트도 STAGING/PROD만
-막는다. 즉 DEV에서 린트 결과는 표시용일 뿐 아무것도 게이트하지 않는다. 여기서 fail-closed를
-걸면 안전 이득은 0인데, 빠른 반복을 위해 엔진이 **의도적으로 절대 막지 않기로 한** DEV
-셀프 적용 경로를 일시적 500 하나로 잠근다.
+**그러나 DEV에는 같은 방식으로 걸지 않는다.** `apps/api/src/apply/lint.engine.ts:89`의
+`if (env === TargetEnv.DEV && base === 'BLOCK') return 'WARN'`은 `sql-review.service.ts`의
+`getPolicyMap`이 **정책 행이 없을 때 채우는 기본값에서만** 적용된다. 저장된 행이 있으면
+그 값을 그대로 쓰고(`update()`에는 DEV를 막는 가드가 없다), `lintFiles`(`lint.engine.ts`)는
+정책 맵을 그대로 읽으므로 관리자가 DEV 정책을 BLOCK으로 저장해 두면 DEV에서도
+`maxSeverity: 'BLOCK'`이 나올 수 있다. 게다가 `apply.service.ts`의 적용 게이트(`hasBlock`
+체크)는 환경과 무관하게 동작해 STAGING/PROD만이 아니라 DEV도 막는다. 즉 **DEV에서
+`maxSeverity`가 BLOCK이 될 수 없다는 보장은 없다** — 이 화면의 DEV 예외
+(`lintGateRequired = cr.targetEnv !== 'DEV'`)는 서버보다 의도적으로 느슨하게 둔 표시용
+게이트일 뿐이고, 서버가 항상 최종 방어선이다. 여기서 fail-closed를 걸지 않는 이유는 DEV의
+평소 흐름(정책 미저장)에서 안전 이득이 없기 때문이지, DEV가 절대 막히지 않아서가 아니다.
+조회 실패로 이 클라이언트 게이트를 통과해 적용을 시도해도, 저장된 DEV+BLOCK 정책이 있다면
+서버가 409로 거부하며 그 메시지는 이제 `applyError`로 인라인 렌더된다.
 
 **변경 후 `canApply` 전문** (이대로 작성할 것):
 
 ```ts
 const lintBlocked = lint?.maxSeverity === 'BLOCK';
-// DEV는 서버가 BLOCK→WARN으로 강등(lint.engine.ts:89)하므로 린트 게이트 자체가 없다.
-// 게이트가 없는 환경에서 조회 실패로 적용을 막으면 안전 이득 없이 비용만 생긴다.
+// DEV는 정책이 없을 때만 서버가 BLOCK→WARN으로 강등한다(기본값, apps/api/src/apply/lint.engine.ts:89).
+// DEV에 BLOCK 정책이 명시적으로 저장돼 있으면 서버 게이트(apply.service.ts의 hasBlock, 환경 무관)가
+// DEV도 막는다 — 그 경우 이 클라이언트 게이트는 의도적으로 느슨하며, 조회 실패 시 서버가 최종 방어선이다.
 const lintGateRequired = cr.targetEnv !== 'DEV';
 const canApply =
   gate.allowed &&

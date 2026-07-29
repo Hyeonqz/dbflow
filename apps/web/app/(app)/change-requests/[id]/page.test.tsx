@@ -135,6 +135,9 @@ describe('action errors', () => {
     expect(textarea).toHaveAttribute('aria-invalid', 'true');
     expect(textarea).toHaveAttribute('aria-describedby', alert.id);
     expect(textarea).toHaveFocus();
+
+    // 에러는 textarea와 버튼 사이에 렌더되어야 한다(DOM 순서 결합).
+    expect(alert.compareDocumentPosition(reject) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('clears the validation message as soon as the user types a reason', async () => {
@@ -166,10 +169,16 @@ describe('action errors', () => {
     await userEvent.click(within(reviewSection).getByRole('button', { name: 'Approve' }));
 
     expect(await within(reviewSection).findByRole('alert')).toHaveTextContent('Already reviewed.');
+    // API 실패는 필드 잘못이 아니므로 invalid로 마킹하지 않아야 한다.
+    expect(textarea).not.toHaveAttribute('aria-invalid');
     // 형제 인스턴스에는 에러가 새지 않아야 한다.
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     // 이 페이지에서 손실 비용이 가장 큰 데이터다. 실패 시 반드시 보존되어야 한다.
     expect(textarea).toHaveValue('looks good');
+
+    // API 실패 메시지는 실제 서버 결과이므로 재입력해도 지워지지 않아야 한다.
+    await userEvent.type(textarea, '!');
+    expect(within(reviewSection).getByRole('alert')).toHaveTextContent('Already reviewed.');
   });
 
   it('shows a failed submit inside the action panel, not only in the page banner', async () => {

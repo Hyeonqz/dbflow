@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithIntl } from '@/test/render-with-intl';
 // Task 4~6이 이 파일에 테스트를 덧붙이면서 makeTargetDb·makeExecution·makeBackup을 추가로 import한다.
-import { makeCr, makeLint, makeUser } from '@/test/fixtures';
+import { makeCr, makeLint, makeTargetDb, makeUser } from '@/test/fixtures';
 
 // useRouter는 반드시 안정된 참조를 돌려줘야 한다. 매 렌더 새 객체를 주면
 // useCurrentUser의 useEffect([router])가 무한 루프를 돌아 힙 OOM으로 죽는다.
@@ -204,5 +204,88 @@ describe('action errors', () => {
 
     const panel = save.closest('section') as HTMLElement;
     expect(await within(panel).findByRole('alert')).toHaveTextContent('Approver not found.');
+  });
+});
+
+describe('apply panel', () => {
+  /** 결재자가 최종 승인된 PROD CR을 보는 상태 — 적용 게이트가 열려 있다. */
+  function signInForProdApply() {
+    signIn(makeUser({ id: 'u-appr', role: 'APPROVER', name: 'Appr' }));
+    vi.mocked(api.getChangeRequest).mockResolvedValue(
+      makeCr({ targetEnv: 'PROD', status: 'FINAL_APPROVED' }),
+    );
+    vi.mocked(api.listTargetDatabases).mockResolvedValue([
+      makeTargetDb({ id: 'db-prod', name: 'orders-prod', env: 'PROD' }),
+    ]);
+  }
+
+  /** 결재자가 DEV CR을 보는 상태 — DEV는 최종 승인 전에도 적용할 수 있다. */
+  function signInForDevApply() {
+    signIn(makeUser({ id: 'u-appr', role: 'APPROVER', name: 'Appr' }));
+    vi.mocked(api.getChangeRequest).mockResolvedValue(makeCr({ targetEnv: 'DEV', status: 'DRAFT' }));
+    vi.mocked(api.listTargetDatabases).mockResolvedValue([makeTargetDb()]);
+  }
+
+  async function selectTargetDb(name: string) {
+    await userEvent.selectOptions(await screen.findByLabelText(/Target database/), [
+      screen.getByRole('option', { name: new RegExp(name) }),
+    ]);
+  }
+
+  it('blocks apply on PROD when the lint result cannot be loaded, and offers a retry', async () => {
+    signInForProdApply();
+    vi.mocked(api.lintChangeRequest).mockRejectedValue(new Error('Request failed. (500)'));
+    renderPage();
+
+    await selectTargetDb('orders-prod');
+
+    expect(await screen.findByRole('status')).toHaveTextContent('cannot be applied');
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument();
+  });
+
+  it('does not block apply on DEV when the lint result cannot be loaded', async () => {
+    // 서버가 DEV의 BLOCK을 WARN으로 강등하므로 DEV에서 린트는 게이트가 아니다.
+    signInForDevApply();
+    vi.mocked(api.lintChangeRequest).mockRejectedValue(new Error('Request failed. (500)'));
+    renderPage();
+
+    await selectTargetDb('orders-dev');
+
+    // DEV 문구는 "적용할 수 없습니다"가 아니라 "위험 구문이 표시되지 않는다"여야 한다 —
+    // 적용 버튼이 활성인 채로 반대 문구를 띄우면 알림 자체가 신뢰를 잃는다.
+    expect(await screen.findByRole('status')).toHaveTextContent('will not be flagged');
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
+  });
+
+  it('re-enables apply after a successful lint retry', async () => {
+    signInForProdApply();
+    vi.mocked(api.lintChangeRequest)
+      .mockRejectedValueOnce(new Error('Request failed. (500)'))
+      .mockResolvedValue(makeLint({ targetEnv: 'PROD' }));
+    renderPage();
+
+    await selectTargetDb('orders-prod');
+    await userEvent.click(await screen.findByRole('button', { name: 'Check again' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled());
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('shows a dry-run failure inside the dry-run section, not next to Apply', async () => {
+    signInForProdApply();
+    vi.mocked(api.dryRunChangeRequest).mockRejectedValue(new Error('Connection refused.'));
+    renderPage();
+
+    await selectTargetDb('orders-prod');
+    const runDryRun = screen.getByRole('button', { name: 'Run dry-run' });
+    await userEvent.click(runDryRun);
+
+    // bg-subtle은 dry-run 래퍼(DryRunSection 루트)에만 붙어 있어 조상 중 유일하게 매칭된다.
+    const dryRunBox = runDryRun.closest('div[class*="bg-subtle"]') as HTMLElement;
+    expect(await within(dryRunBox).findByRole('alert')).toHaveTextContent('Connection refused.');
+    // 적용 버튼 옆이 아니라 dry-run 영역 안에 있어야 한다.
+    const applyButton = screen.getByRole('button', { name: 'Apply' });
+    expect(dryRunBox.contains(applyButton)).toBe(false);
   });
 });

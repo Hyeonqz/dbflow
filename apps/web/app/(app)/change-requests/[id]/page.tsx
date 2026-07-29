@@ -153,7 +153,6 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
               <ApplyPanel
                 cr={cr}
                 user={user}
-                onError={setError}
                 onApplied={async () => {
                   await Promise.all([load(), loadExecutions(), loadBackups()]);
                 }}
@@ -597,12 +596,10 @@ function applyStatusGate(cr: ChangeRequestDetail): { allowed: boolean; reasonKey
 function ApplyPanel({
   cr,
   user,
-  onError,
   onApplied,
 }: {
   cr: ChangeRequestDetail;
   user: User;
-  onError: (msg: string) => void;
   onApplied: () => Promise<unknown>;
 }) {
   const locale = useLocale() as Locale;
@@ -618,8 +615,11 @@ function ApplyPanel({
 
   // 안전장치(Plan 5)
   const [lint, setLint] = useState<LintResult | null>(null);
+  const [lintNotice, setLintNotice] = useState('');
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
   const [dryRunning, setDryRunning] = useState(false);
+  const [dryRunError, setDryRunError] = useState('');
+  const [applyError, setApplyError] = useState('');
 
   // 적용 작업창/동결 상태(Plan 6) — 배너는 보조 표시, 실제 강제는 서버 게이트
   const [schedule, setSchedule] = useState<ScheduleStatus | null>(null);
@@ -651,16 +651,30 @@ function ApplyPanel({
   }, [roleAllowed]);
 
   // 적용 전 위험 SQL 린트(대상 DB와 무관, CR 파일 정적 분석). 환경정책 반영된 severity.
-  useEffect(() => {
-    if (!roleAllowed) return;
+  // 실패 시 STAGING/PROD는 적용을 막으므로(fail-closed) 재시도 수단이 반드시 필요하다.
+  const loadLint = useCallback(() => {
     let active = true;
+    setLintNotice('');
     lintChangeRequest(cr.id)
-      .then((res) => active && setLint(res))
-      .catch(() => active && setLint(null)); // 린트 실패는 적용을 막지 않되 표시만 생략
+      .then((res) => {
+        if (!active) return;
+        setLint(res);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLint(null);
+        // DEV는 적용이 막히지 않으므로 "적용할 수 없습니다"라고 말하면 안 된다.
+        setLintNotice(t(cr.targetEnv === 'DEV' ? 'lintUnavailableDev' : 'lintUnavailable'));
+      });
     return () => {
       active = false;
     };
-  }, [roleAllowed, cr.id]);
+  }, [cr.id, cr.targetEnv, t]);
+
+  useEffect(() => {
+    if (!roleAllowed) return;
+    return loadLint();
+  }, [roleAllowed, loadLint]);
 
   const matching = useMemo(
     () => (dbs ?? []).filter((d) => d.env === cr.targetEnv),
@@ -670,16 +684,20 @@ function ApplyPanel({
   if (!roleAllowed) return null;
 
   const lintBlocked = lint?.maxSeverity === 'BLOCK';
+  // DEV는 서버가 BLOCK→WARN으로 강등(apps/api/src/apply/lint.engine.ts:89)하므로
+  // 린트 게이트 자체가 없다. 게이트가 없는 환경에서 조회 실패로 적용을 막으면
+  // 안전 이득 없이 빠른 반복 경로만 잠근다.
+  const lintGateRequired = cr.targetEnv !== 'DEV';
 
   async function runDryRun() {
     if (!selectedId) return;
     setDryRunning(true);
     setDryRun(null);
-    onError('');
+    setDryRunError('');
     try {
       setDryRun(await dryRunChangeRequest(cr.id, selectedId));
     } catch (err) {
-      onError((err as Error).message);
+      setDryRunError((err as Error).message);
     } finally {
       setDryRunning(false);
     }
@@ -688,14 +706,14 @@ function ApplyPanel({
   async function apply() {
     if (!selectedId) return;
     setBusy(true);
-    onError('');
+    setApplyError('');
     setResult(null);
     try {
       const exec = await applyChangeRequest(cr.id, selectedId);
       setResult({ status: exec.status });
       await onApplied();
     } catch (err) {
-      onError((err as Error).message);
+      setApplyError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -707,6 +725,7 @@ function ApplyPanel({
     !busy &&
     matching.length > 0 &&
     !lintBlocked &&
+    !(lintGateRequired && lint === null) &&
     (schedule === null || schedule.allowed);
 
   return (
@@ -748,6 +767,20 @@ function ApplyPanel({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {lintNotice && (
+        <div className="mt-3">
+          <InlineError message={lintNotice} tone="notice" />
+          <div className="mt-2 flex justify-end">
+            <button
+              onClick={loadLint}
+              className="focusable rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle"
+            >
+              {t('lintRetry')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -820,6 +853,7 @@ function ApplyPanel({
             running={dryRunning}
             disabled={!selectedId || dryRunning}
             onRun={runDryRun}
+            error={dryRunError}
           />
 
           <div className="mt-4 flex items-center justify-end gap-3">
@@ -827,6 +861,7 @@ function ApplyPanel({
               {busy ? t('applying') : t('applyTitle')}
             </button>
           </div>
+          <InlineError message={applyError} className="mt-3" />
         </>
       )}
 
@@ -851,11 +886,13 @@ function DryRunSection({
   running,
   disabled,
   onRun,
+  error,
 }: {
   result: DryRunResult | null;
   running: boolean;
   disabled: boolean;
   onRun: () => void;
+  error?: string;
 }) {
   const t = useTranslations('changeRequestDetail');
   return (
@@ -873,6 +910,8 @@ function DryRunSection({
           {running ? t('checking') : t('runDryRun')}
         </button>
       </div>
+
+      <InlineError message={error} className="mt-3" />
 
       {result && (
         <ul className="mt-3 space-y-2">

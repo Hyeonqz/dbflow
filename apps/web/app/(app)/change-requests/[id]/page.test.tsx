@@ -171,8 +171,8 @@ describe('action errors', () => {
     expect(await within(reviewSection).findByRole('alert')).toHaveTextContent('Already reviewed.');
     // API 실패는 필드 잘못이 아니므로 invalid로 마킹하지 않아야 한다.
     expect(textarea).not.toHaveAttribute('aria-invalid');
-    // 형제 인스턴스에는 에러가 새지 않아야 한다.
-    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    // 형제 인스턴스(같은 섹션 안의 결재용 DecisionAction)에는 에러가 새지 않아야 한다.
+    expect(within(reviewSection).getAllByRole('alert')).toHaveLength(1);
     // 이 페이지에서 손실 비용이 가장 큰 데이터다. 실패 시 반드시 보존되어야 한다.
     expect(textarea).toHaveValue('looks good');
 
@@ -287,8 +287,9 @@ describe('apply panel', () => {
     // 적용 버튼 옆이 아니라 dry-run 영역 안에 있어야 한다.
     const applyButton = screen.getByRole('button', { name: 'Apply' });
     expect(dryRunBox.contains(applyButton)).toBe(false);
-    // 페이지 배너 등 다른 곳에 중복 렌더되지 않고 alert가 정확히 하나여야 한다.
-    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    // ApplyPanel 안에 중복 렌더되지 않고 alert가 정확히 하나여야 한다.
+    const applyPanel = applyButton.closest('section') as HTMLElement;
+    expect(within(applyPanel).getAllByRole('alert')).toHaveLength(1);
   });
 });
 
@@ -330,10 +331,12 @@ describe('apply history notices', () => {
     const notice = await screen.findByRole('status');
     expect(notice).toHaveTextContent('does not mean the change was never applied');
     // "적용 이력 (0)"은 §4-3이 없애려는 바로 그 거짓 음성이다.
-    expect(screen.getByRole('heading', { name: 'Apply history' })).toBeInTheDocument();
+    const historyHeading = screen.getByRole('heading', { name: 'Apply history' });
+    expect(historyHeading).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Apply history \(0\)/ })).toBeNull();
-    // 이력을 못 불러온 상황에서 백업 알림은 중복이자 무의미하다.
-    expect(screen.getAllByRole('status')).toHaveLength(1);
+    // 이력을 못 불러온 상황에서 백업 알림은 중복이자 무의미하다(섹션 안에서만 확인).
+    const historySection = historyHeading.closest('section') as HTMLElement;
+    expect(within(historySection).getAllByRole('status')).toHaveLength(1);
   });
 
   it('re-enables the rollback button after a successful rollback', async () => {

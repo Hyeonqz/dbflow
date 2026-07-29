@@ -484,7 +484,7 @@ function SubmitAction({
     }
   }
   return (
-    <div>
+    <section>
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted">{t('submitNotice')}</p>
         <button onClick={submit} disabled={busy} className="btn-primary shrink-0 px-5 py-2.5 text-sm">
@@ -492,7 +492,7 @@ function SubmitAction({
         </button>
       </div>
       <InlineError message={error} className="mt-3" />
-    </div>
+    </section>
   );
 }
 
@@ -636,6 +636,7 @@ function ApplyPanel({
   // 안전장치(Plan 5)
   const [lint, setLint] = useState<LintResult | null>(null);
   const [lintNotice, setLintNotice] = useState('');
+  const [lintRetrying, setLintRetrying] = useState(false);
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
   const [dryRunning, setDryRunning] = useState(false);
   const [dryRunError, setDryRunError] = useState('');
@@ -674,17 +675,25 @@ function ApplyPanel({
   // 실패 시 STAGING/PROD는 적용을 막으므로(fail-closed) 재시도 수단이 반드시 필요하다.
   const loadLint = useCallback(() => {
     let active = true;
-    setLintNotice('');
+    // lintNotice를 여기서 지우지 않는다 — 지우면 재시도 클릭 즉시 알림과 버튼이 함께
+    // 사라져 요청이 끝날 때까지 Apply만 비활성인 채 설명 없는 화면이 된다. 대신
+    // lintRetrying으로 버튼 라벨만 바꾸고, 알림은 결과가 온 뒤에만 갱신한다.
+    setLintRetrying(true);
     lintChangeRequest(cr.id)
       .then((res) => {
         if (!active) return;
         setLint(res);
+        setLintNotice('');
       })
       .catch(() => {
         if (!active) return;
         setLint(null);
         // DEV는 적용이 막히지 않으므로 "적용할 수 없습니다"라고 말하면 안 된다.
         setLintNotice(t(cr.targetEnv === 'DEV' ? 'lintUnavailableDev' : 'lintUnavailable'));
+      })
+      .finally(() => {
+        if (!active) return;
+        setLintRetrying(false);
       });
     return () => {
       active = false;
@@ -796,9 +805,10 @@ function ApplyPanel({
           <div className="mt-2 flex justify-end">
             <button
               onClick={loadLint}
-              className="focusable rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle"
+              disabled={lintRetrying}
+              className="focusable rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-ink ring-1 ring-border-strong transition-colors hover:bg-subtle disabled:opacity-50"
             >
-              {t('lintRetry')}
+              {lintRetrying ? t('checking') : t('lintRetry')}
             </button>
           </div>
         </div>
@@ -995,7 +1005,9 @@ function ExecutionHistory({
   const t = useTranslations('changeRequestDetail');
   const rows = executions ?? [];
   // 알림이 있으면 목록이 비어도 섹션을 렌더해야 알림이 표시될 자리가 생긴다.
-  if (rows.length === 0 && !executionsNotice && !backupsNotice) return null;
+  // 단, backupsNotice는 rows.length===0이면 아래에서 절대 표시되지 않으므로(위 message 조건 참고)
+  // 그것만으로는 섹션을 렌더할 이유가 안 된다 — 안 그러면 빈 "Apply history (0)" 제목만 남는다.
+  if (rows.length === 0 && !executionsNotice) return null;
 
   const backupsById = new Map(backups.map((b) => [b.id, b]));
 
@@ -1004,9 +1016,11 @@ function ExecutionHistory({
       <h2 className="text-base font-semibold text-ink">
         {executionsNotice ? t('applyHistoryTitle') : t('applyHistory', { count: rows.length })}
       </h2>
-      {/* 이력을 못 불러온 상황에서 백업 알림은 중복이고, 롤백할 이력 자체가 없어 무의미하다. */}
+      {/* 이력을 못 불러온 상황에서 백업 알림은 중복이고, 롤백할 이력 자체가 없어 무의미하다.
+          canRollback이 false거나(그 역할은 롤백 버튼 자체를 볼 수 없다) 실행 이력이 0건이면
+          (롤백 대상이 없다) 백업 알림도 보여줄 이유가 없다. */}
       <InlineError
-        message={executionsNotice || backupsNotice}
+        message={executionsNotice || (canRollback && rows.length > 0 ? backupsNotice : '')}
         tone="notice"
         className="mt-3"
       />

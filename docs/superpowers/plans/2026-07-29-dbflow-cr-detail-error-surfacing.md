@@ -30,6 +30,19 @@
 
 스펙 §13은 "인프라+테스트+수정을 한 커밋으로"를 요구했다. 그 이유는 **실패하는 테스트가 main에 올라가 CI가 빨개지는 것**을 막기 위함이었다. 이 계획은 각 태스크 안에서 TDD 사이클(실패 테스트 작성 → 확인 → 수정 → 통과 → 커밋)을 완결시키므로 **커밋 시점에는 항상 초록**이다. 따라서 태스크별 커밋이 안전하며, 스펙의 목적을 더 잘 달성한다. CI 스텝은 Task 1에서 인프라와 함께 추가해 이후 모든 태스크가 CI 검증을 받게 한다.
 
+다만 "초록"만으로는 부족한 경우가 하나 있어 처리했다. `staleContent` 접두는 스펙 §7이
+Task 3 몫으로 기술했지만, 그 시점에는 공유 `error`에 액션 실패가 여전히 흘러들어 **승인
+실패에 "화면을 갱신하지 못했습니다"가 붙는 반대 문구**가 3커밋 동안 main에 남는다. CI는
+초록이지만 사용자에게 거짓말을 하는 상태다. 그래서 접두와 그 테스트를 마지막 `onError`
+작성자가 사라지는 **Task 6으로 옮겼다.**
+
+### 스펙 §8-3(테스트 include 글롭)에 대한 편차
+
+스펙 §8-3은 `include: ['{app,components,lib}/**/*.test.{ts,tsx}']`로 적었으나, 스펙 §12는
+카탈로그 대칭 테스트를 `messages/messages.test.ts`에 두라고 한다. 그대로 두면 그 테스트가
+**조용히 수집되지 않는다.** 이 계획은 글롭에 `messages`를 추가했다. 스펙과 계획을 대조하는
+리뷰어가 이를 "되돌려야 할 실수"로 오해하지 않도록 여기 기록한다.
+
 ---
 
 ## File Structure
@@ -55,7 +68,7 @@
 | `apps/web/app/(app)/change-requests/[id]/page.tsx` | 에러 3종 분리, `onError` 배선 제거, 린트 환경별 fail-closed + 재시도, 백업/이력 알림, `rollingBack` 수정 |
 | `apps/web/lib/api.ts` | `apiFetch`의 `fetch`를 try/catch로 감싸 지역화된 네트워크 에러 |
 | `apps/web/lib/i18n-client.ts` | `networkError` 문자열 |
-| `apps/web/messages/en.json`, `ko.json` | 신규 키 6개 |
+| `apps/web/messages/en.json`, `ko.json` | 신규 키 7개 |
 | `apps/web/package.json` | devDeps 7개, `test` 스크립트 |
 | `package.json` (루트) | `web:test` 스크립트 |
 | `.github/workflows/ci.yml` | `web 테스트` 스텝 |
@@ -447,14 +460,12 @@ git commit -m "refactor(web): add InlineError and give DecisionAction its own se
 - Create: `apps/web/test/fixtures.ts`
 - Create: `apps/web/app/(app)/change-requests/[id]/page.test.tsx`
 - Modify: `apps/web/app/(app)/change-requests/[id]/page.tsx` (58~62행 `load`, 89행 배너)
-- Modify: `apps/web/messages/en.json`, `apps/web/messages/ko.json` (`staleContent`)
 
 **Interfaces:**
 - Consumes: `renderWithIntl` (Task 1), `InlineError` (Task 2)
 - Produces:
   - `apps/web/test/fixtures.ts` — `makeUser`, `makeCr`, `makeTargetDb`, `makeLint`, `makeExecution`, `makeBackup`. Task 4~6이 전부 이 팩토리를 쓴다.
   - `page.test.tsx`의 공용 스캐폴딩(mock 선언, `beforeEach` 기본값). Task 4~6이 같은 파일에 테스트를 덧붙인다.
-  - i18n 키 `changeRequestDetail.staleContent`
 
 - [ ] **Step 1: 픽스처 팩토리 작성 — `apps/web/test/fixtures.ts`**
 
@@ -649,7 +660,7 @@ describe('load errors', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Request failed. (500)');
   });
 
-  it('keeps the loaded content and marks it stale when a refresh fails', async () => {
+  it('keeps the loaded content visible when a refresh fails', async () => {
     vi.mocked(api.getChangeRequest)
       .mockResolvedValueOnce(makeCr())
       .mockRejectedValue(new Error('Request failed. (500)'));
@@ -658,9 +669,7 @@ describe('load errors', () => {
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: 'Request review' }));
 
-    const banner = await screen.findByRole('alert');
-    expect(banner).toHaveTextContent('may be out of date');
-    expect(banner).toHaveTextContent('Request failed. (500)');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Request failed. (500)');
     // 기존 내용이 남아 있어야 사용자가 무엇을 보고 있는지 알 수 있다.
     expect(screen.getByRole('heading', { name: 'Add index on orders' })).toBeInTheDocument();
   });
@@ -689,24 +698,10 @@ describe('load errors', () => {
 Run: `pnpm --filter @dbflow/web test page.test`
 Expected:
 - `shows the banner when the initial load fails` → **PASS** (positive control. 이게 실패하면 렌더 자체가 안 되는 것이므로 인프라 문제를 먼저 해결할 것)
-- `keeps the loaded content and marks it stale...` → **FAIL**: `Unable to find role="alert"` (배너가 `!cr`로 막혀 있음)
+- `keeps the loaded content visible when a refresh fails` → **FAIL**: `Unable to find role="alert"` (배너가 `!cr`로 막혀 있음)
 - `clears the load error once a later refresh succeeds` → **FAIL**: 같은 이유
 
-- [ ] **Step 4: i18n 키 `staleContent` 추가**
-
-`apps/web/messages/en.json`의 `changeRequestDetail`에:
-
-```json
-"staleContent": "Could not refresh this page, so the content below may be out of date.",
-```
-
-`apps/web/messages/ko.json`의 `changeRequestDetail`에:
-
-```json
-"staleContent": "화면을 갱신하지 못했습니다. 아래 내용은 최신이 아닐 수 있습니다.",
-```
-
-- [ ] **Step 5: `load`가 성공 시 에러를 지우도록 수정**
+- [ ] **Step 4: `load`가 성공 시 에러를 지우도록 수정**
 
 58~62행:
 
@@ -733,7 +728,7 @@ Expected:
 
 로 바꾼다.
 
-- [ ] **Step 6: 배너의 `!cr` 게이트 제거 + `staleContent` 접두**
+- [ ] **Step 5: 배너의 `!cr` 게이트 제거**
 
 Task 2에서 만든
 
@@ -744,19 +739,23 @@ Task 2에서 만든
 를
 
 ```tsx
-      {/* cr이 이미 있는데 에러가 났다면 갱신만 실패한 것이다. 원시 에러만 보여주면
-          "내 승인이 실패했다"로 읽혀 사용자가 다시 눌러 중복 결재를 만든다. */}
-      <InlineError message={error ? (cr ? `${t('staleContent')} ${error}` : error) : ''} />
+      <InlineError message={error} />
 ```
 
 로 바꾼다.
 
-- [ ] **Step 7: 테스트 실행 — 통과 확인**
+**`staleContent` 접두는 여기서 붙이지 않는다.** 이 시점에는 공유 `error`에 여전히 액션
+실패도 흘러들어온다(`AssigneePanel`·`ActionPanel`은 Task 4까지, `ApplyPanel`은 Task 5까지,
+`ExecutionHistory`는 Task 6까지). 지금 접두를 붙이면 승인 실패에도 "화면을 갱신하지
+못했습니다"가 앞에 붙어 **사실과 반대되는 문구**가 된다. 마지막 `onError` 작성자가 사라지는
+Task 6에서 붙인다.
+
+- [ ] **Step 6: 테스트 실행 — 통과 확인**
 
 Run: `pnpm --filter @dbflow/web test page.test`
 Expected: PASS — 3개 전부 통과.
 
-- [ ] **Step 8: 전체 검증**
+- [ ] **Step 7: 전체 검증**
 
 Run:
 ```bash
@@ -764,16 +763,17 @@ pnpm --filter @dbflow/web exec tsc --noEmit && \
 pnpm --filter @dbflow/web test && \
 pnpm --filter @dbflow/web build
 ```
-Expected: 모두 성공. 카탈로그 대칭 테스트도 통과해야 한다(en/ko 양쪽에 키를 넣었으므로).
+Expected: 모두 성공.
 
-- [ ] **Step 9: 커밋**
+- [ ] **Step 8: 커밋**
+
+이 태스크는 i18n 카탈로그를 건드리지 않는다.
 
 ```bash
 git add apps/web/test/fixtures.ts \
   "apps/web/app/(app)/change-requests/[id]/page.test.tsx" \
-  "apps/web/app/(app)/change-requests/[id]/page.tsx" \
-  apps/web/messages/en.json apps/web/messages/ko.json
-git commit -m "fix(web): surface CR detail load errors and flag stale content"
+  "apps/web/app/(app)/change-requests/[id]/page.tsx"
+git commit -m "fix(web): surface CR detail load errors after the page has rendered"
 ```
 
 ---
@@ -831,30 +831,42 @@ describe('action errors', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 
-  it('shows a failed decision inside the decision section and keeps the typed comment', async () => {
-    signInAsReviewer();
+  it('scopes a failed decision to its own instance and keeps the typed comment', async () => {
+    // canActAsDelegate=true면 검토용과 결재용 DecisionAction이 동시에 마운트된다.
+    // 이 상황이야말로 루트를 <section>으로 바꾼 이유이므로 여기서 검증한다.
+    signIn(makeUser({ id: 'u-rev', role: 'REVIEWER', name: 'Rev' }));
+    vi.mocked(api.getChangeRequest).mockResolvedValue(
+      makeCr({ status: 'SUBMITTED', canActAsDelegate: true }),
+    );
     vi.mocked(api.reviewChangeRequest).mockRejectedValue(new Error('Already reviewed.'));
     renderPage();
 
-    const textarea = await screen.findByLabelText('Review comment');
+    // 두 인스턴스가 같은 라벨/버튼명을 쓰므로 제목으로 섹션을 특정한 뒤 그 안에서 찾는다.
+    const reviewSection = (await screen.findByRole('heading', { name: 'Review (1st)' }))
+      .closest('section') as HTMLElement;
+    const textarea = within(reviewSection).getByLabelText('Review comment');
     await userEvent.type(textarea, 'looks good');
-    const approve = screen.getByRole('button', { name: 'Approve' });
-    await userEvent.click(approve);
+    await userEvent.click(within(reviewSection).getByRole('button', { name: 'Approve' }));
 
-    const decisionSection = approve.closest('section') as HTMLElement;
-    expect(await within(decisionSection).findByRole('alert')).toHaveTextContent('Already reviewed.');
+    expect(await within(reviewSection).findByRole('alert')).toHaveTextContent('Already reviewed.');
+    // 형제 인스턴스에는 에러가 새지 않아야 한다.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
     // 이 페이지에서 손실 비용이 가장 큰 데이터다. 실패 시 반드시 보존되어야 한다.
     expect(textarea).toHaveValue('looks good');
   });
 
-  it('shows a failed submit next to the submit button', async () => {
+  it('shows a failed submit inside the action panel, not only in the page banner', async () => {
     vi.mocked(api.submitChangeRequest).mockRejectedValue(new Error('Reviewer is required.'));
     renderPage();
 
     const submit = await screen.findByRole('button', { name: 'Request review' });
     await userEvent.click(submit);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Reviewer is required.');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Reviewer is required.');
+    // 포함 관계를 단언하지 않으면 상단 배너만으로도 통과해 인라인 배치를 전혀 증명하지 못한다
+    // (프로토타입 실행에서 실제로 수정 전에도 통과함을 확인했다).
+    expect(submit.closest('section')!.contains(alert)).toBe(true);
   });
 
   it('shows a failed assignee save inside the assignee panel', async () => {
@@ -1167,7 +1179,16 @@ git commit -m "fix(web): render decision, submit and assignee errors next to the
 
 **배경(반드시 읽을 것):** 서버는 `apps/api/src/apply/lint.engine.ts:89`에서 DEV의 BLOCK을 WARN으로 강등한다. 즉 **DEV에서는 린트가 아무것도 게이트하지 않는다.** 따라서 린트 조회 실패로 적용을 막는 것은 STAGING/PROD에서만 의미가 있고, DEV에서 막으면 안전 이득 0에 비용만 생긴다. 또한 린트 effect의 deps가 세션 중 바뀌지 않으므로 **재시도 수단이 없으면 일시적 500 하나가 새로고침 전까지 적용을 영구히 잠근다.**
 
-- [ ] **Step 1: 실패하는 테스트 작성 — `page.test.tsx`에 아래 describe 블록을 추가**
+- [ ] **Step 1: 픽스처 import 확장 후 실패하는 테스트 작성 — `page.test.tsx`**
+
+먼저 파일 상단의 픽스처 import에 `makeTargetDb`를 추가한다. 이걸 빠뜨리면 `tsc --noEmit`이
+`Cannot find name 'makeTargetDb'`로 실패하고, Task 1에서 넣은 CI 스텝이 main을 빨갛게 만든다.
+
+```tsx
+import { makeCr, makeLint, makeTargetDb, makeUser } from '@/test/fixtures';
+```
+
+그다음 아래 describe 블록을 파일 끝에 추가한다.
 
 ```tsx
 describe('apply panel', () => {
@@ -1215,7 +1236,9 @@ describe('apply panel', () => {
 
     await selectTargetDb('orders-dev');
 
-    expect(await screen.findByRole('status')).toHaveTextContent('cannot be applied');
+    // DEV 문구는 "적용할 수 없습니다"가 아니라 "위험 구문이 표시되지 않는다"여야 한다 —
+    // 적용 버튼이 활성인 채로 반대 문구를 띄우면 알림 자체가 신뢰를 잃는다.
+    expect(await screen.findByRole('status')).toHaveTextContent('will not be flagged');
     expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
   });
 
@@ -1266,6 +1289,7 @@ Expected: `apply panel`의 4개 전부 FAIL.
 
 ```json
 "lintUnavailable": "Could not load the risky-SQL check result, so this change cannot be applied. Please retry; if it keeps failing, contact your administrator.",
+"lintUnavailableDev": "Could not load the risky-SQL check result. DEV can still be applied, but risky statements will not be flagged. Please retry to see the check result.",
 "lintRetry": "Check again",
 ```
 
@@ -1273,8 +1297,13 @@ Expected: `apply panel`의 4개 전부 FAIL.
 
 ```json
 "lintUnavailable": "위험 SQL 검사 결과를 불러오지 못해 적용할 수 없습니다. 다시 시도해 주세요. 계속 실패하면 관리자에게 문의하세요.",
+"lintUnavailableDev": "위험 SQL 검사 결과를 불러오지 못했습니다. DEV는 그대로 적용할 수 있지만 위험 구문이 표시되지 않습니다. 다시 시도해 검사 결과를 확인해 주세요.",
 "lintRetry": "다시 확인",
 ```
+
+**키가 두 개인 이유:** DEV는 린트 결과가 없어도 적용이 막히지 않는다(Step 6 참조). 그런데
+"적용할 수 없습니다"라고 적힌 앰버 상자 옆에 활성화된 적용 버튼이 있으면 운영자는 그 상자를
+무시하도록 학습한다. 통제 절차 제품에서 가장 나쁜 종류의 알림이므로 환경별로 문구를 나눈다.
 
 - [ ] **Step 4: `ApplyPanel`의 시그니처와 state 정리**
 
@@ -1321,12 +1350,13 @@ function ApplyPanel({
       .catch(() => {
         if (!active) return;
         setLint(null);
-        setLintNotice(t('lintUnavailable'));
+        // DEV는 적용이 막히지 않으므로 "적용할 수 없습니다"라고 말하면 안 된다.
+        setLintNotice(t(cr.targetEnv === 'DEV' ? 'lintUnavailableDev' : 'lintUnavailable'));
       });
     return () => {
       active = false;
     };
-  }, [cr.id, t]);
+  }, [cr.id, cr.targetEnv, t]);
 
   useEffect(() => {
     if (!roleAllowed) return;
@@ -1353,6 +1383,12 @@ function ApplyPanel({
     !(lintGateRequired && lint === null) &&
     (schedule === null || schedule.allowed);
 ```
+
+**알려진 과도 상태:** `lint === null`은 조회가 *실패했을 때*뿐 아니라 *아직 진행 중일 때*도
+참이다. 따라서 STAGING/PROD에서는 린트 왕복이 끝날 때까지(보통 수백 ms) 적용 버튼이 이유
+표시 없이 비활성이다. 게이트는 로딩 중에도 닫혀 있어야 하므로 이 동작을 완화하지 않는다.
+버튼이 스스로 비활성 사유를 설명하는 문제는 로드맵 4단계 E6(적용 준비 체크리스트 위젯)의
+몫이며, 이 과도 상태도 거기서 함께 해소된다.
 
 - [ ] **Step 7: `runDryRun`과 `apply`를 각자의 에러 state로 전환**
 
@@ -1506,19 +1542,28 @@ git commit -m "fix(web): split apply/dry-run errors and fail closed on unknown l
 **Files:**
 - Modify: `apps/web/app/(app)/change-requests/[id]/page.test.tsx` (테스트 추가)
 - Modify: `apps/web/app/(app)/change-requests/[id]/page.tsx` (부모 64~74·167~175행, `ExecutionHistory` 917~950행, `ExecutionCard` 952~1063행)
-- Modify: `apps/web/messages/en.json`, `apps/web/messages/ko.json` (`backupsUnavailable`, `executionsUnavailable`, `applyHistoryTitle`)
+- Modify: `apps/web/messages/en.json`, `apps/web/messages/ko.json` (`backupsUnavailable`, `executionsUnavailable`, `applyHistoryTitle`, `staleContent`)
 
 **Interfaces:**
 - Consumes: `InlineError` (Task 2), 픽스처와 스캐폴딩 (Task 3)
 - Produces:
   - `ExecutionHistory`의 최종 prop 목록: `executions`, `backups`, `canRollback`, `onRolledBack`, `backupsNotice: string`, `executionsNotice: string`. **`onError`는 제거된다.**
-  - i18n 키 `changeRequestDetail.backupsUnavailable`, `executionsUnavailable`, `applyHistoryTitle`
+  - i18n 키 `changeRequestDetail.backupsUnavailable`, `executionsUnavailable`, `applyHistoryTitle`, `staleContent`
+  - 마지막 `onError` 작성자가 사라지므로, 이 태스크 이후 부모의 `error`는 로드 실패 전용이 된다.
 
 **배경(반드시 읽을 것):** `apps/api/src/apply/apply.controller.ts:72`가 `:id/backups`를 `@Roles(DEVELOPER, APPROVER)`로 막는다. 즉 **DEVELOPER는 권한이 있고**, 403을 받는 쪽은 **REVIEWER와 ADMIN**이다. 이 둘은 모든 CR 상세 조회에서 매번 403을 받으며 애초에 롤백 버튼을 볼 수 없으므로, 403에 알림을 띄우면 순수한 소음이다.
 
-- [ ] **Step 1: 실패하는 테스트 작성 — `page.test.tsx`에 아래 describe 블록을 추가**
+- [ ] **Step 1: 픽스처 import 확장 후 실패하는 테스트 작성 — `page.test.tsx`**
 
-`ApiError`는 mock에서 `importOriginal`로 살아 있으므로 실제 클래스를 쓴다.
+먼저 파일 상단의 픽스처 import를 아래로 확장한다. 빠뜨리면 `tsc --noEmit`이
+`Cannot find name 'makeExecution'`으로 실패해 CI가 빨개진다.
+
+```tsx
+import { makeBackup, makeCr, makeExecution, makeLint, makeTargetDb, makeUser } from '@/test/fixtures';
+```
+
+그다음 아래 describe 블록을 파일 끝에 추가한다. `ApiError`는 mock에서 `importOriginal`로
+살아 있으므로 실제 클래스를 쓴다.
 
 ```tsx
 describe('apply history notices', () => {
@@ -1576,7 +1621,7 @@ describe('apply history notices', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Rollback' })).toBeEnabled());
   });
 
-  it('shows a failed rollback under its own button', async () => {
+  it('shows a failed rollback inside its own execution card, not only in the page banner', async () => {
     signInWithHistory();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(api.rollbackExecution).mockRejectedValue(new Error('Backup expired.'));
@@ -1585,7 +1630,40 @@ describe('apply history notices', () => {
     const rollback = await screen.findByRole('button', { name: 'Rollback' });
     await userEvent.click(rollback);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Backup expired.');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Backup expired.');
+    // ExecutionCard의 루트는 <article>이다. 포함 관계 없이는 상단 배너만으로 통과한다
+    // (프로토타입 실행에서 실제로 수정 전에도 통과함을 확인했다).
+    expect(rollback.closest('article')!.contains(alert)).toBe(true);
+  });
+});
+
+describe('stale content banner', () => {
+  // 이 태스크에서 마지막 onError 작성자가 사라지므로, 이제 상단 배너에 도달하는 에러는
+  // 로드 실패뿐이다. 그래야 "갱신 실패" 접두가 사실과 일치한다.
+  it('tells the user the screen is stale when a post-action refresh fails', async () => {
+    vi.mocked(api.getChangeRequest)
+      .mockResolvedValueOnce(makeCr())
+      .mockRejectedValue(new Error('Request failed. (500)'));
+    vi.mocked(api.submitChangeRequest).mockResolvedValue(makeCr());
+
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Request review' }));
+
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('may be out of date');
+    expect(banner).toHaveTextContent('Request failed. (500)');
+    expect(screen.getByRole('heading', { name: 'Add index on orders' })).toBeInTheDocument();
+  });
+
+  it('does not claim staleness when the very first load fails', async () => {
+    vi.mocked(api.getChangeRequest).mockRejectedValue(new Error('Request failed. (500)'));
+    renderPage();
+
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('Request failed. (500)');
+    // 아직 아무것도 못 불러왔으므로 "아래 내용이 낡았다"고 말할 대상이 없다.
+    expect(banner).not.toHaveTextContent('may be out of date');
   });
 });
 ```
@@ -1607,6 +1685,7 @@ Expected: `apply history notices`의 5개 중
 "backupsUnavailable": "Could not load the backup list, so the rollback option stays hidden even if a backup exists. Please reload the page.",
 "executionsUnavailable": "Could not load the apply history. This does not mean the change was never applied. Please reload the page to check.",
 "applyHistoryTitle": "Apply history",
+"staleContent": "Could not refresh this page, so the content below may be out of date.",
 ```
 
 `apps/web/messages/ko.json`의 `changeRequestDetail`에:
@@ -1615,6 +1694,7 @@ Expected: `apply history notices`의 5개 중
 "backupsUnavailable": "백업 목록을 불러오지 못했습니다. 백업이 있어도 롤백 버튼이 표시되지 않으니 페이지를 새로고침해 주세요.",
 "executionsUnavailable": "적용 이력을 불러오지 못했습니다. 적용된 적이 없다는 뜻이 아닙니다. 페이지를 새로고침해 확인해 주세요.",
 "applyHistoryTitle": "적용 이력",
+"staleContent": "화면을 갱신하지 못했습니다. 아래 내용은 최신이 아닐 수 있습니다.",
 ```
 
 - [ ] **Step 4: 부모에 알림 state를 추가하고 403을 구분**
@@ -1794,12 +1874,33 @@ function ExecutionCard({
       )}
 ```
 
-- [ ] **Step 9: 테스트 실행 — 통과 확인**
+- [ ] **Step 9: 상단 배너에 `staleContent` 접두 붙이기**
+
+이 태스크에서 마지막 `onError` 작성자가 사라졌으므로, 이제 부모의 `error`에 도달하는 것은
+로드 실패뿐이다. 비로소 접두가 사실과 일치한다.
+
+Task 3에서 만든
+
+```tsx
+      <InlineError message={error} />
+```
+
+를
+
+```tsx
+      {/* cr이 이미 있는데 에러가 났다면 갱신만 실패한 것이다. 원시 에러만 보여주면
+          "내 승인이 실패했다"로 읽혀 사용자가 다시 눌러 중복 결재를 만든다. */}
+      <InlineError message={error ? (cr ? `${t('staleContent')} ${error}` : error) : ''} />
+```
+
+로 바꾼다.
+
+- [ ] **Step 10: 테스트 실행 — 통과 확인**
 
 Run: `pnpm --filter @dbflow/web test page.test`
-Expected: PASS — 17개 통과 (load 3 + action 5 + apply 4 + history 5).
+Expected: PASS — 19개 통과 (load 3 + action 5 + apply 4 + history 5 + stale 2).
 
-- [ ] **Step 10: 전체 검증**
+- [ ] **Step 11: 전체 검증**
 
 Run:
 ```bash
@@ -1812,7 +1913,7 @@ Expected: 모두 성공. 이 시점에 `page.tsx`에는 `onError`라는 식별�
 Run: `grep -c onError "apps/web/app/(app)/change-requests/[id]/page.tsx"`
 Expected: `0`
 
-- [ ] **Step 11: 커밋**
+- [ ] **Step 12: 커밋**
 
 ```bash
 git add "apps/web/app/(app)/change-requests/[id]/page.tsx" \
@@ -1938,12 +2039,36 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 ```
 
-- [ ] **Step 5: 테스트 실행 — 통과 확인**
+- [ ] **Step 5: `login()`도 같이 감싸기 — `apps/web/lib/api.ts`**
+
+`login()`은 `apiFetch`를 거치지 않고 `fetch`를 직접 호출한다(74행 부근). **VPN이 끊긴
+사용자가 가장 먼저 도착하는 화면이 로그인**이므로 여기를 빼면 수정의 효과가 절반이 된다.
+
+```ts
+export async function login(email: string, password: string) {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept-Language': currentLocale() },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new ApiError(0, ct('networkError'));
+  }
+  if (!res.ok) throw new Error(ct('loginFailed'));
+  // 이하 기존 코드 유지
+```
+
+`downloadAuditExport()`(605행 부근)도 `fetch`를 직접 쓰지만 사용자가 명시적으로 시작한
+다운로드이고 실패가 즉시 드러나므로 이번 범위에서 제외한다.
+
+- [ ] **Step 6: 테스트 실행 — 통과 확인**
 
 Run: `pnpm --filter @dbflow/web test api.test`
 Expected: PASS — 2개 통과.
 
-- [ ] **Step 6: 전체 검증**
+- [ ] **Step 7: 전체 검증**
 
 Run:
 ```bash
@@ -1951,9 +2076,9 @@ pnpm --filter @dbflow/web exec tsc --noEmit && \
 pnpm --filter @dbflow/web test && \
 pnpm --filter @dbflow/web build
 ```
-Expected: 모두 성공. 전체 테스트 19개 통과.
+Expected: 모두 성공. 전체 테스트 27개 통과(page 19 + api 2 + inline-error 4 + 스모크 1 + 카탈로그 대칭 1).
 
-- [ ] **Step 7: 커밋**
+- [ ] **Step 8: 커밋**
 
 ```bash
 git add apps/web/lib/api.ts apps/web/lib/api.test.ts apps/web/lib/i18n-client.ts
@@ -2011,7 +2136,7 @@ git commit -m "docs: record stage-0 completion and its manual QA items"
 
 ```bash
 cd /Users/jinhyeongyu/toy-project/project-dbflow
-pnpm --filter @dbflow/web test          # 19개 통과
+pnpm --filter @dbflow/web test          # 27개 통과
 pnpm --filter @dbflow/web exec tsc --noEmit
 pnpm --filter @dbflow/web build
 pnpm --filter @dbflow/api test          # 기존 API 스위트 회귀 없음
@@ -2022,29 +2147,43 @@ grep -c onError "apps/web/app/(app)/change-requests/[id]/page.tsx"   # 0
 
 ## 스펙 대비 테스트 매핑
 
-스펙 §9는 12개를 요구했다. 이 계획은 19개로 늘렸다 — 스펙의 12개는 하한이었고, 태스크별 TDD 사이클을 완결시키려면 액션별 커버리지가 더 필요했다.
+스펙 §9는 12개를 요구했다. 이 계획은 `page.test.tsx`에 19개, 전체 27개로 늘렸다 — 스펙의
+12개는 하한이었고, 태스크별 TDD 사이클을 완결시키려면 액션별 커버리지가 더 필요했다.
 
 | 스펙 §9 | 계획 |
 |---|---|
 | #1 빈 코멘트 반려 | Task 4 `shows the missing-reason validation…` |
-| #2 승인 실패 | Task 4 `shows a failed decision…` |
+| #2 승인 실패 | Task 4 `scopes a failed decision to its own instance…` |
 | #3 초기 로드 실패 (positive control) | Task 3 `shows the banner when the initial load fails` |
-| #4 갱신 실패 + staleContent | Task 3 `keeps the loaded content and marks it stale…` |
+| #4 갱신 실패 + staleContent | Task 3 `keeps the loaded content visible…` + **Task 6** `tells the user the screen is stale…` |
 | #5 재시도 성공 시 클리어 | Task 3 `clears the load error once a later refresh succeeds` |
 | #6 PROD 린트 실패 | Task 5 `blocks apply on PROD…` |
 | #7 DEV 린트 실패 | Task 5 `does not block apply on DEV…` |
 | #8 린트 재시도 | Task 5 `re-enables apply after a successful lint retry` |
 | #9 백업 500/403 | Task 6 `warns when the backup list…` + `stays silent when…forbidden` |
 | #10 롤백 성공 후 재활성화 | Task 6 `re-enables the rollback button…` |
-| #11 코멘트 보존 | Task 4 `shows a failed decision…keeps the typed comment` |
+| #11 코멘트 보존 | Task 4 `scopes a failed decision…keeps the typed comment` |
 | #12 dry-run 실패 위치 | Task 5 `shows a dry-run failure inside the dry-run section…` |
 | 카탈로그 대칭 | Task 1 `en and ko expose an identical key set` |
 | (추가) 검증 메시지 입력 시 소멸 | Task 4 `clears the validation message as soon as…` |
-| (추가) 제출 실패 | Task 4 `shows a failed submit next to the submit button` |
+| (추가) 제출 실패의 **인라인 배치** | Task 4 `shows a failed submit inside the action panel…` |
 | (추가) 담당자 저장 실패 | Task 4 `shows a failed assignee save…` |
 | (추가) 이력 조회 실패 + 개수 없는 제목 | Task 6 `says the history could not be loaded…` |
-| (추가) 롤백 실패 | Task 6 `shows a failed rollback under its own button` |
+| (추가) 롤백 실패의 **인라인 배치** | Task 6 `shows a failed rollback inside its own execution card…` |
+| (추가) 첫 로드 실패엔 stale 문구 없음 | Task 6 `does not claim staleness when the very first load fails` |
 | (추가) 네트워크 에러 지역화 | Task 7 `turns an unreachable server into a localized ApiError` |
 | (추가) HTTP 에러 회귀 방지 | Task 7 `keeps HTTP error responses untouched` |
 | (추가) 인프라 스모크 | Task 1 `renders a component through the @/ alias…` |
 | (추가) `InlineError` 단위 4개 | Task 2 |
+
+### 검수에서 실증된 것
+
+계획 초안을 스크래치 복사본에 그대로 구현해 실행한 결과, **두 테스트가 수정 전에도
+통과**했다 — 제출 실패와 롤백 실패. 둘 다 `screen.findByRole('alert')`만 확인해서 상단
+배너로 충족됐고, 인라인 배치를 전혀 증명하지 못했다. 스펙 §9가 이름 붙여 금지한 바로 그
+실패 양식이다. 위 표에서 **인라인 배치**로 표시한 두 항목은 포함 관계(`closest(...).contains`)
+단언으로 교체해 실제로 red가 되도록 고친 것이다.
+
+`makeTargetDb`·`makeExecution`·`makeBackup`을 import 없이 쓰던 Task 5·6의 컴파일 오류,
+DEV에서 "적용할 수 없습니다"라고 쓰면서 적용 버튼은 활성인 문구 모순도 같은 검수에서
+발견해 반영했다.

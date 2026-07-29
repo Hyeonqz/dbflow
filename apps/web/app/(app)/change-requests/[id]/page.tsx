@@ -39,6 +39,7 @@ import {
   StatusBadge,
 } from '@/components/badges';
 import { formatBusinessDateTime, formatDateTime } from '@/lib/format';
+import { InlineError } from '@/components/inline-error';
 import { PageHeader } from '@/components/page-header';
 import type { Locale } from '@/i18n/config';
 
@@ -86,11 +87,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
   return (
     <>
-      {error && !cr && (
-        <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-300">
-          {error}
-        </p>
-      )}
+      {!cr && <InlineError message={error} />}
 
       {!error && !cr && <p className="text-muted">{t('loading')}</p>}
 
@@ -522,7 +519,7 @@ function DecisionAction({
   }
 
   return (
-    <div>
+    <section>
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-semibold">{title}</h2>
         {badge}
@@ -550,7 +547,7 @@ function DecisionAction({
           {busy === 'REJECT' ? t('processing') : t('reject')}
         </button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -749,11 +746,7 @@ function ApplyPanel({
         </p>
       )}
 
-      {dbNotice && (
-        <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-          {dbNotice}
-        </p>
-      )}
+      <InlineError message={dbNotice} tone="notice" className="mt-3" />
 
       {gate.allowed && dbs !== null && matching.length === 0 && !dbNotice && (
         <p className="mt-3 rounded-2xl bg-subtle px-4 py-3 text-sm text-muted">

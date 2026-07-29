@@ -25,6 +25,7 @@
 - 신규 i18n 키는 전부 `changeRequestDetail` 네임스페이스에 넣는다.
 - 단언은 렌더된 텍스트/DOM에 대해서만 한다. `expect(someApiFn).toHaveBeenCalled()` 류는 mock을 검사할 뿐이므로 쓰지 않는다.
 - 모든 비동기 단언은 `await screen.findBy*` 또는 `waitFor`를 거친다. `getBy*`를 즉시 쓰면 `act()` 경고와 순서 의존 플레이크가 난다.
+- **red 단계의 스위트 소요 시간에 놀라지 말 것.** 아직 통과하지 않는 테스트는 `findBy`가 정적 DOM을 1초 동안 폴링한 뒤 실패하므로, 실패 개수 × 약 1초가 그대로 소요 시간에 더해진다. 프로토타입 실측에서 11개가 red일 때 파일 전체가 11.4초였고(9회 반복 측정: 11.42~11.85초), 수정이 적용되면 해당 `findBy`들이 즉시 해소되어 1~2초대로 떨어진다. 튜닝할 것이 아니다.
 
 ### 스펙 §13(단일 커밋)에 대한 의도적 편차
 
@@ -154,6 +155,11 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     include: ['{app,components,lib,messages}/**/*.test.{ts,tsx}'],
+    // 각 테스트 전에 spy를 원복한다. 없으면 Task 6의 vi.spyOn(window,'confirm')이 다음
+    // 테스트로 새어 confirm()이 계속 true를 반환한다 — clearAllMocks는 호출 기록만 지우고
+    // mockReturnValue는 남기기 때문이다(실측 확인). beforeEach가 재설정하는 vi.fn() 모듈
+    // mock에는 영향이 없다(적용 전후 결과 동일함을 실측 확인).
+    restoreMocks: true,
   },
 });
 ```
@@ -894,6 +900,12 @@ Run: `pnpm --filter @dbflow/web test page.test`
 Expected: `action errors`의 5개 전부 FAIL. 실패 사유가 `Unable to find role="alert"`여야 한다(에러가 부모 배너로 흘러가 `!cr` 조건과 무관하게 이제는 상단에 뜨지만, `within(section)` 범위 안에는 없음). `shows a failed submit next to the submit button`은 상단 배너 때문에 통과할 수도 있는데, 그렇더라도 Step 4 이후 인라인 위치로 옮겨진다.
 
 - [ ] **Step 3: `AssigneePanel`에서 `onError`를 로컬 state로 전환**
+
+**기존 effect를 건드리지 말 것.** `useEffect(..., [cr.reviewerId, cr.approvers])`가
+`setApproverIds`에 매번 새 배열을 넘기는데, 지금은 `cr`이 로드 간 참조가 안정적이라 effect가
+한 번만 돈다(계측으로 확인: DOM 변형 1회). 만약 `cr`이 렌더마다 새 객체가 되면 이건 즉시
+무한 렌더 루프가 된다 — 이 파일이 이미 `useRouter`에서 같은 부류의 힙 OOM을 겪었다.
+이번 태스크는 에러 state만 추가한다.
 
 시그니처에서 `onError`를 제거한다 (342~349행):
 

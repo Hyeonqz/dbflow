@@ -43,5 +43,8 @@ jobs:
       - name: web 타입 검사
         run: pnpm --filter @dbflow/web exec tsc --noEmit
 
+      - name: web 테스트
+        run: pnpm --filter @dbflow/web test
+
       - name: web 빌드
         run: pnpm --filter @dbflow/web build

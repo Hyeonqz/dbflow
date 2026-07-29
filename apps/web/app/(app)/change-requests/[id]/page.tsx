@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTimeZone, useTranslations } from 'next-intl';
 import { useCurrentUser, type User } from '@/lib/auth';
 import {
@@ -144,16 +144,11 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
             {/* Right: actions + apply + history + status history */}
             <div className="flex flex-col gap-6">
-              <AssigneePanel cr={cr} user={user} onError={setError} onDone={load} />
+              <AssigneePanel cr={cr} user={user} onDone={load} />
 
               <ApprovalProgressPanel cr={cr} />
 
-              <ActionPanel
-                cr={cr}
-                user={user}
-                onError={setError}
-                onDone={load}
-              />
+              <ActionPanel cr={cr} user={user} onDone={load} />
 
               <ApplyPanel
                 cr={cr}
@@ -213,12 +208,10 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 function ActionPanel({
   cr,
   user,
-  onError,
   onDone,
 }: {
   cr: ChangeRequestDetail;
   user: User;
-  onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
@@ -237,15 +230,12 @@ function ActionPanel({
 
   return (
     <section className="rounded-2xl bg-card p-5 ring-1 ring-border">
-      {canSubmit && (
-        <SubmitAction id={cr.id} onError={onError} onDone={onDone} />
-      )}
+      {canSubmit && <SubmitAction id={cr.id} onDone={onDone} />}
       {canReview && (
         <DecisionAction
           title={t('reviewTitle')}
           badge={isReviewDelegate ? <DelegateBadge label={t('delegateReview')} /> : null}
           run={(decision, comment) => reviewChangeRequest(cr.id, decision, comment)}
-          onError={onError}
           onDone={onDone}
         />
       )}
@@ -254,7 +244,6 @@ function ActionPanel({
           title={t('finalApprovalTitle')}
           badge={isApproveDelegate ? <DelegateBadge label={t('delegateApproval')} /> : null}
           run={(decision, comment) => approveChangeRequest(cr.id, decision, comment)}
-          onError={onError}
           onDone={onDone}
         />
       )}
@@ -339,12 +328,10 @@ function ApprovalProgressPanel({ cr }: { cr: ChangeRequestDetail }) {
 function AssigneePanel({
   cr,
   user,
-  onError,
   onDone,
 }: {
   cr: ChangeRequestDetail;
   user: User;
-  onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
@@ -357,6 +344,7 @@ function AssigneePanel({
     cr.approvers.length > 0 ? cr.approvers.map((a) => a.userId) : [''],
   );
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!canReassign) return;
@@ -392,7 +380,7 @@ function AssigneePanel({
 
   async function reassign() {
     setBusy(true);
-    onError('');
+    setError('');
     try {
       await setAssignees(cr.id, {
         reviewerId: reviewerId || undefined,
@@ -400,7 +388,7 @@ function AssigneePanel({
       });
       await onDone();
     } catch (err) {
-      onError((err as Error).message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -449,39 +437,42 @@ function AssigneePanel({
           {busy ? t('changing') : t('changeAssignment')}
         </button>
       </div>
+      <InlineError message={error} className="mt-3" />
     </section>
   );
 }
 
 function SubmitAction({
   id,
-  onError,
   onDone,
 }: {
   id: string;
-  onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   async function submit() {
     setBusy(true);
-    onError('');
+    setError('');
     try {
       await submitChangeRequest(id);
       await onDone();
     } catch (err) {
-      onError((err as Error).message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   }
   return (
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-sm text-muted">{t('submitNotice')}</p>
-      <button onClick={submit} disabled={busy} className="btn-primary shrink-0 px-5 py-2.5 text-sm">
-        {busy ? t('submitting') : t('requestReview')}
-      </button>
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted">{t('submitNotice')}</p>
+        <button onClick={submit} disabled={busy} className="btn-primary shrink-0 px-5 py-2.5 text-sm">
+          {busy ? t('submitting') : t('requestReview')}
+        </button>
+      </div>
+      <InlineError message={error} className="mt-3" />
     </div>
   );
 }
@@ -490,23 +481,29 @@ function DecisionAction({
   title,
   badge,
   run,
-  onError,
   onDone,
 }: {
   title: string;
   badge?: React.ReactNode;
   run: (decision: ReviewDecision, comment: string) => Promise<unknown>;
-  onError: (msg: string) => void;
   onDone: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState<ReviewDecision | null>(null);
+  const [error, setError] = useState('');
+  // 검증 실패일 때만 textarea를 aria로 연결한다. API 실패는 필드 잘못이 아니다.
+  const [invalid, setInvalid] = useState(false);
+  const errorId = useId();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   async function act(decision: ReviewDecision) {
-    onError('');
+    setError('');
+    setInvalid(false);
     if (decision === 'REJECT' && !comment.trim()) {
-      onError(t('rejectReasonRequired'));
+      setError(t('rejectReasonRequired'));
+      setInvalid(true);
+      textareaRef.current?.focus(); // WCAG 3.3.1 — 문제가 된 필드를 식별시킨다
       return;
     }
     setBusy(decision);
@@ -515,7 +512,7 @@ function DecisionAction({
       setComment('');
       await onDone();
     } catch (err) {
-      onError((err as Error).message);
+      setError((err as Error).message);
     } finally {
       setBusy(null);
     }
@@ -528,12 +525,23 @@ function DecisionAction({
         {badge}
       </div>
       <textarea
+        ref={textareaRef}
         aria-label={t('reviewCommentAriaLabel')}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? errorId : undefined}
         className="mt-3 w-full resize-y rounded-2xl bg-subtle px-4 py-3 text-sm outline-none ring-1 ring-border-strong focus:ring-primary"
         placeholder={t('commentPlaceholder')}
         value={comment}
-        onChange={(e) => setComment(e.target.value)}
+        onChange={(e) => {
+          setComment(e.target.value);
+          // 검증 에러만 입력 즉시 지운다. API 실패는 실제 서버 결과이므로 재시도까지 남긴다.
+          if (invalid) {
+            setError('');
+            setInvalid(false);
+          }
+        }}
       />
+      <InlineError message={error} id={errorId} className="mt-3" />
       <div className="mt-3 flex gap-3">
         <button
           onClick={() => act('APPROVE')}

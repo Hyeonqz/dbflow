@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithIntl } from '@/test/render-with-intl';
 // Task 4~6이 이 파일에 테스트를 덧붙이면서 makeTargetDb·makeExecution·makeBackup을 추가로 import한다.
@@ -107,5 +107,93 @@ describe('load errors', () => {
 
     await userEvent.click(submit);
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+});
+
+describe('action errors', () => {
+  /** 검토자가 제출된 CR을 보는 상태 — DecisionAction(검토)이 렌더된다. */
+  function signInAsReviewer() {
+    signIn(makeUser({ id: 'u-rev', role: 'REVIEWER', name: 'Rev' }));
+    vi.mocked(api.getChangeRequest).mockResolvedValue(makeCr({ status: 'SUBMITTED' }));
+  }
+
+  it('shows the missing-reason validation inside the decision section and marks the field', async () => {
+    signInAsReviewer();
+    renderPage();
+
+    const reject = await screen.findByRole('button', { name: 'Reject' });
+    await userEvent.click(reject);
+
+    // 에러는 반려 버튼이 속한 DecisionAction 안에 있어야 한다.
+    // (Task 2에서 DecisionAction 루트를 <section>으로 바꿨기에 이 단언이 인스턴스에 결합한다)
+    const decisionSection = reject.closest('section');
+    expect(decisionSection).not.toBeNull();
+    const alert = within(decisionSection as HTMLElement).getByRole('alert');
+    expect(alert).toHaveTextContent('Please enter a reason when rejecting.');
+
+    const textarea = screen.getByLabelText('Review comment');
+    expect(textarea).toHaveAttribute('aria-invalid', 'true');
+    expect(textarea).toHaveAttribute('aria-describedby', alert.id);
+    expect(textarea).toHaveFocus();
+  });
+
+  it('clears the validation message as soon as the user types a reason', async () => {
+    signInAsReviewer();
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Reject' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Review comment'), 'needs an index name');
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+
+  it('scopes a failed decision to its own instance and keeps the typed comment', async () => {
+    // canActAsDelegate=true면 검토용과 결재용 DecisionAction이 동시에 마운트된다.
+    // 이 상황이야말로 루트를 <section>으로 바꾼 이유이므로 여기서 검증한다.
+    signIn(makeUser({ id: 'u-rev', role: 'REVIEWER', name: 'Rev' }));
+    vi.mocked(api.getChangeRequest).mockResolvedValue(
+      makeCr({ status: 'SUBMITTED', canActAsDelegate: true }),
+    );
+    vi.mocked(api.reviewChangeRequest).mockRejectedValue(new Error('Already reviewed.'));
+    renderPage();
+
+    // 두 인스턴스가 같은 라벨/버튼명을 쓰므로 제목으로 섹션을 특정한 뒤 그 안에서 찾는다.
+    const reviewSection = (await screen.findByRole('heading', { name: 'Review (1st)' }))
+      .closest('section') as HTMLElement;
+    const textarea = within(reviewSection).getByLabelText('Review comment');
+    await userEvent.type(textarea, 'looks good');
+    await userEvent.click(within(reviewSection).getByRole('button', { name: 'Approve' }));
+
+    expect(await within(reviewSection).findByRole('alert')).toHaveTextContent('Already reviewed.');
+    // 형제 인스턴스에는 에러가 새지 않아야 한다.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    // 이 페이지에서 손실 비용이 가장 큰 데이터다. 실패 시 반드시 보존되어야 한다.
+    expect(textarea).toHaveValue('looks good');
+  });
+
+  it('shows a failed submit inside the action panel, not only in the page banner', async () => {
+    vi.mocked(api.submitChangeRequest).mockRejectedValue(new Error('Reviewer is required.'));
+    renderPage();
+
+    const submit = await screen.findByRole('button', { name: 'Request review' });
+    await userEvent.click(submit);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Reviewer is required.');
+    // 포함 관계를 단언하지 않으면 상단 배너만으로도 통과해 인라인 배치를 전혀 증명하지 못한다
+    // (프로토타입 실행에서 실제로 수정 전에도 통과함을 확인했다).
+    expect(submit.closest('section')!.contains(alert)).toBe(true);
+  });
+
+  it('shows a failed assignee save inside the assignee panel', async () => {
+    vi.mocked(api.setAssignees).mockRejectedValue(new Error('Approver not found.'));
+    renderPage();
+
+    const save = await screen.findByRole('button', { name: 'Update assignment' });
+    await userEvent.click(save);
+
+    const panel = save.closest('section') as HTMLElement;
+    expect(await within(panel).findByRole('alert')).toHaveTextContent('Approver not found.');
   });
 });

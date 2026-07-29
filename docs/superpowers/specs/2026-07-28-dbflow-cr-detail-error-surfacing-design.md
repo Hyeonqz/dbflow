@@ -1,6 +1,6 @@
 # CR 상세 페이지 에러 표면화 + 프론트엔드 테스트 인프라 설계
 
-> 작성 2026-07-28. UX 로드맵 **0단계**([roadmap-ux-candidates.md](../../roadmap-ux-candidates.md) §0, [ROADMAP.md](../../ROADMAP.md) "UX 기능 개발 리스트").
+> 작성 2026-07-28. UX 로드맵 **0단계**([roadmap-ux-candidates.md](../../refactor/roadmap-ux-candidates.md) §0, [ROADMAP.md](../../ROADMAP.md) "UX 기능 개발 리스트").
 > 규모: **M** (당초 S로 추정했으나 검수에서 fail-open 2건, 테스트 인프라 부재, 미번역 네트워크 에러 노출이 드러나 상향).
 >
 > 검수 이력 — 4개 에이전트를 거쳤다.

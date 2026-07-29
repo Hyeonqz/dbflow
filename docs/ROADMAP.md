@@ -25,7 +25,7 @@ DB 변경요청을 ERP식 다단계 승인으로 관리하고 실제 대상 DB�
 ## 🧭 기능 오케스트레이션 (실행 계획)
 
 아래 Tier-2 후보 문서와 UX 후보 문서를 **경쟁 제품 조사(공통 기본기 / 차별화 기회)와 합쳐 하나의 실행 계획으로 묶은 것**:
-**[feature-orchestration.html](./feature-orchestration.html)** (2026-07-29).
+**[feature-orchestration.html](./refactor/feature-orchestration.html)** (2026-07-29).
 
 세 축(따라잡기 · 심화 · 앞서가기)으로 분류하고, 실행 순서와 **일부러 만들지 않을 것** 목록까지 담았다.
 HTML이므로 GitHub에서는 소스로만 보인다 — 브라우저로 파일을 직접 열거나, 발행된 페이지를 볼 것.
@@ -40,7 +40,7 @@ HTML이므로 GitHub에서는 소스로만 보인다 — 브라우저로 파일�
 ## 🔭 다음 (Tier-2 후보)
 
 경쟁·유사 툴(Bytebase / ITIL·ServiceNow / Liquibase / Redgate / Yearning·Archery) 리서치로 도출한
-다음 기능 후보와 추천 3선은 **[roadmap-tier2-candidates.md](./roadmap-tier2-candidates.md)** 참고.
+다음 기능 후보와 추천 3선은 **[roadmap-tier2-candidates.md](./refactor/roadmap-tier2-candidates.md)** 참고.
 B1(변경 작업창·동결) ✅ PR #13, A1 부재 위임 ✅ PR #14. 다음 추천: ① A1 잔여(에스컬레이션·SLA + 알림 발송 인프라) → ② 긴급 변경 fast-path + 사후 검토(PIR) → ③ 롤백 계획 필수화.
 
 ---
@@ -48,7 +48,7 @@ B1(변경 작업창·동결) ✅ PR #13, A1 부재 위임 ✅ PR #14. 다음 추
 ## 🎨 UX 기능 개발 리스트 (2026-07-27 리서치 기반)
 
 실제 제품(Bytebase·Archery·Yearning·SQLE·Atlas)·승인 워크플로우 UX(GitHub·Linear·ServiceNow·Brex)·현재 UI 전수 탐색을
-종합한 개발 리스트. 상세 근거·참고 제품·경계 항목은 **[roadmap-ux-candidates.md](./roadmap-ux-candidates.md)** 참고.
+종합한 개발 리스트. 상세 근거·참고 제품·경계 항목은 **[roadmap-ux-candidates.md](./refactor/roadmap-ux-candidates.md)** 참고.
 각 항목은 개발 사이클(brainstorm→스펙 검수→plan→plan 검수→구현→리뷰→머지)로 진행.
 
 ### 0단계 — 버그픽스 (최우선, S)

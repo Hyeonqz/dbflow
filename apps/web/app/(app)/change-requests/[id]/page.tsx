@@ -55,6 +55,8 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
   const [executions, setExecutions] = useState<Execution[] | null>(null);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [error, setError] = useState('');
+  const [executionsNotice, setExecutionsNotice] = useState('');
+  const [backupsNotice, setBackupsNotice] = useState('');
 
   const load = useCallback(() => {
     return getChangeRequest(id)
@@ -67,15 +69,30 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
   const loadExecutions = useCallback(() => {
     return listExecutions(id)
-      .then(setExecutions)
-      .catch(() => setExecutions([])); // 이력 조회 실패는 본문 흐름을 막지 않음
-  }, [id]);
+      .then((rows) => {
+        setExecutions(rows);
+        setExecutionsNotice('');
+      })
+      .catch(() => {
+        // 조회 실패를 빈 배열로 삼키면 "적용된 적 없음"으로 보인다 — 감사 제품에서 최악의 거짓 음성.
+        setExecutions([]);
+        setExecutionsNotice(t('executionsUnavailable'));
+      });
+  }, [id, t]);
 
   const loadBackups = useCallback(() => {
     return listBackups(id)
-      .then(setBackups)
-      .catch(() => setBackups([])); // 권한/조회 실패는 본문 흐름을 막지 않음
-  }, [id]);
+      .then((rows) => {
+        setBackups(rows);
+        setBackupsNotice('');
+      })
+      .catch((err: unknown) => {
+        setBackups([]);
+        // REVIEWER·ADMIN은 백업 조회 권한이 없어 매 조회마다 403을 받는다(정상 경로).
+        // 그들은 롤백 버튼도 볼 수 없으므로 알리면 소음이다. 그 외 실패만 알린다.
+        setBackupsNotice(err instanceof ApiError && err.status === 403 ? '' : t('backupsUnavailable'));
+      });
+  }, [id, t]);
 
   useEffect(() => {
     if (!ready) return;
@@ -90,7 +107,9 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
   return (
     <>
-      <InlineError message={error} />
+      {/* cr이 이미 있는데 에러가 났다면 갱신만 실패한 것이다. 원시 에러만 보여주면
+          "내 승인이 실패했다"로 읽혀 사용자가 다시 눌러 중복 결재를 만든다. */}
+      <InlineError message={error ? (cr ? `${t('staleContent')} ${error}` : error) : ''} />
 
       {!error && !cr && <p className="text-muted">{t('loading')}</p>}
 
@@ -162,7 +181,8 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
                 executions={executions}
                 backups={backups}
                 canRollback={applyRoleAllowed(cr, user)}
-                onError={setError}
+                executionsNotice={executionsNotice}
+                backupsNotice={backupsNotice}
                 onRolledBack={async () => {
                   await Promise.all([load(), loadExecutions(), loadBackups()]);
                 }}
@@ -961,31 +981,42 @@ function ExecutionHistory({
   executions,
   backups,
   canRollback,
-  onError,
+  executionsNotice,
+  backupsNotice,
   onRolledBack,
 }: {
   executions: Execution[] | null;
   backups: Backup[];
   canRollback: boolean;
-  onError: (msg: string) => void;
+  executionsNotice: string;
+  backupsNotice: string;
   onRolledBack: () => Promise<unknown>;
 }) {
   const t = useTranslations('changeRequestDetail');
-  if (executions === null || executions.length === 0) return null;
+  const rows = executions ?? [];
+  // 알림이 있으면 목록이 비어도 섹션을 렌더해야 알림이 표시될 자리가 생긴다.
+  if (rows.length === 0 && !executionsNotice && !backupsNotice) return null;
 
   const backupsById = new Map(backups.map((b) => [b.id, b]));
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-ink">{t('applyHistory', { count: executions.length })}</h2>
+      <h2 className="text-base font-semibold text-ink">
+        {executionsNotice ? t('applyHistoryTitle') : t('applyHistory', { count: rows.length })}
+      </h2>
+      {/* 이력을 못 불러온 상황에서 백업 알림은 중복이고, 롤백할 이력 자체가 없어 무의미하다. */}
+      <InlineError
+        message={executionsNotice || backupsNotice}
+        tone="notice"
+        className="mt-3"
+      />
       <div className="mt-3 space-y-4">
-        {executions.map((exec) => (
+        {rows.map((exec) => (
           <ExecutionCard
             key={exec.id}
             exec={exec}
             backup={exec.backupId ? backupsById.get(exec.backupId) : undefined}
             canRollback={canRollback}
-            onError={onError}
             onRolledBack={onRolledBack}
           />
         ))}
@@ -998,18 +1029,17 @@ function ExecutionCard({
   exec,
   backup,
   canRollback,
-  onError,
   onRolledBack,
 }: {
   exec: Execution;
   backup: Backup | undefined;
   canRollback: boolean;
-  onError: (msg: string) => void;
   onRolledBack: () => Promise<unknown>;
 }) {
   const locale = useLocale() as Locale;
   const t = useTranslations('changeRequestDetail');
   const [rollingBack, setRollingBack] = useState(false);
+  const [error, setError] = useState('');
   const isApply = (exec.kind ?? 'APPLY') === 'APPLY';
   const restorable = isBackupRestorable(backup);
   // Rollback exposure condition: APPLY execution + restorable backup + permission
@@ -1020,12 +1050,15 @@ function ExecutionCard({
       return;
     }
     setRollingBack(true);
-    onError('');
+    setError('');
     try {
       await rollbackExecution(exec.id);
       await onRolledBack();
     } catch (err) {
-      onError((err as Error).message);
+      setError((err as Error).message);
+    } finally {
+      // 성공 경로에도 반드시 리셋해야 한다. 카드는 exec.id 키로 그대로 마운트된 채 남으므로
+      // 리셋하지 않으면 버튼이 "롤백 중…" 라벨로 영구 비활성이 된다.
       setRollingBack(false);
     }
   }
@@ -1088,17 +1121,18 @@ function ExecutionCard({
       </ol>
 
       {showRollback && (
-        <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3">
-          <p className="text-xs text-muted">
-            {t('rollbackDesc')}
-          </p>
-          <button
-            onClick={rollback}
-            disabled={rollingBack}
-            className="focusable shrink-0 rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:ring-red-500/30 dark:hover:bg-red-500/15"
-          >
-            {rollingBack ? t('rollingBack') : t('rollback')}
-          </button>
+        <div className="border-t border-border bg-card px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted">{t('rollbackDesc')}</p>
+            <button
+              onClick={rollback}
+              disabled={rollingBack}
+              className="focusable shrink-0 rounded-2xl bg-card px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:ring-red-500/30 dark:hover:bg-red-500/15"
+            >
+              {rollingBack ? t('rollingBack') : t('rollback')}
+            </button>
+          </div>
+          <InlineError message={error} className="mt-3" />
         </div>
       )}
     </article>

@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithIntl } from '@/test/render-with-intl';
 // Task 4~6이 이 파일에 테스트를 덧붙이면서 makeTargetDb·makeExecution·makeBackup을 추가로 import한다.
-import { makeCr, makeLint, makeTargetDb, makeUser } from '@/test/fixtures';
+import { makeBackup, makeCr, makeExecution, makeLint, makeTargetDb, makeUser } from '@/test/fixtures';
 
 // useRouter는 반드시 안정된 참조를 돌려줘야 한다. 매 렌더 새 객체를 주면
 // useCurrentUser의 useEffect([router])가 무한 루프를 돌아 힙 OOM으로 죽는다.
@@ -289,5 +289,106 @@ describe('apply panel', () => {
     expect(dryRunBox.contains(applyButton)).toBe(false);
     // 페이지 배너 등 다른 곳에 중복 렌더되지 않고 alert가 정확히 하나여야 한다.
     expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+});
+
+describe('apply history notices', () => {
+  /** 결재자 + 실행 이력 1건 — ExecutionHistory 섹션이 렌더되는 최소 조건. */
+  function signInWithHistory() {
+    signIn(makeUser({ id: 'u-appr', role: 'APPROVER', name: 'Appr' }));
+    vi.mocked(api.getChangeRequest).mockResolvedValue(
+      makeCr({ targetEnv: 'DEV', status: 'APPLIED' }),
+    );
+    vi.mocked(api.listExecutions).mockResolvedValue([makeExecution()]);
+    vi.mocked(api.listBackups).mockResolvedValue([makeBackup()]);
+  }
+
+  it('warns when the backup list could not be loaded', async () => {
+    signInWithHistory();
+    vi.mocked(api.listBackups).mockRejectedValue(new api.ApiError(500, 'Request failed. (500)'));
+    renderPage();
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Could not load the backup list');
+  });
+
+  it('stays silent when the backup list is forbidden for this role', async () => {
+    signInWithHistory();
+    vi.mocked(api.listBackups).mockRejectedValue(new api.ApiError(403, 'Forbidden'));
+    renderPage();
+
+    // 섹션 자체는 렌더되어야 "알림 없음"이 의미를 갖는다(섹션이 통째로 없으면 공허한 단언).
+    expect(await screen.findByRole('heading', { name: /Apply history/ })).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('says the history could not be loaded instead of showing a zero count', async () => {
+    signInWithHistory();
+    vi.mocked(api.listExecutions).mockRejectedValue(new Error('Request failed. (500)'));
+    vi.mocked(api.listBackups).mockRejectedValue(new api.ApiError(500, 'Request failed. (500)'));
+    renderPage();
+
+    const notice = await screen.findByRole('status');
+    expect(notice).toHaveTextContent('does not mean the change was never applied');
+    // "적용 이력 (0)"은 §4-3이 없애려는 바로 그 거짓 음성이다.
+    expect(screen.getByRole('heading', { name: 'Apply history' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Apply history \(0\)/ })).toBeNull();
+    // 이력을 못 불러온 상황에서 백업 알림은 중복이자 무의미하다.
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
+  it('re-enables the rollback button after a successful rollback', async () => {
+    signInWithHistory();
+    vi.spyOn(window, 'confirm').mockReturnValue(true); // jsdom 미구현 — 스텁하지 않으면 롤백이 실행되지 않는다
+    vi.mocked(api.rollbackExecution).mockResolvedValue(makeExecution({ id: 'ex2', kind: 'ROLLBACK' }));
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Rollback' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Rollback' })).toBeEnabled());
+  });
+
+  it('shows a failed rollback inside its own execution card, not only in the page banner', async () => {
+    signInWithHistory();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(api.rollbackExecution).mockRejectedValue(new Error('Backup expired.'));
+    renderPage();
+
+    const rollback = await screen.findByRole('button', { name: 'Rollback' });
+    await userEvent.click(rollback);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Backup expired.');
+    // ExecutionCard의 루트는 <article>이다. 포함 관계 없이는 상단 배너만으로 통과한다
+    // (프로토타입 실행에서 실제로 수정 전에도 통과함을 확인했다).
+    expect(rollback.closest('article')!.contains(alert)).toBe(true);
+  });
+});
+
+describe('stale content banner', () => {
+  // 이 태스크에서 마지막 onError 작성자가 사라지므로, 이제 상단 배너에 도달하는 에러는
+  // 로드 실패뿐이다. 그래야 "갱신 실패" 접두가 사실과 일치한다.
+  it('tells the user the screen is stale when a post-action refresh fails', async () => {
+    vi.mocked(api.getChangeRequest)
+      .mockResolvedValueOnce(makeCr())
+      .mockRejectedValue(new Error('Request failed. (500)'));
+    vi.mocked(api.submitChangeRequest).mockResolvedValue(makeCr());
+
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Request review' }));
+
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('may be out of date');
+    expect(banner).toHaveTextContent('Request failed. (500)');
+    expect(screen.getByRole('heading', { name: 'Add index on orders' })).toBeInTheDocument();
+  });
+
+  it('does not claim staleness when the very first load fails', async () => {
+    vi.mocked(api.getChangeRequest).mockRejectedValue(new Error('Request failed. (500)'));
+    renderPage();
+
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('Request failed. (500)');
+    // 아직 아무것도 못 불러왔으므로 "아래 내용이 낡았다"고 말할 대상이 없다.
+    expect(banner).not.toHaveTextContent('may be out of date');
   });
 });

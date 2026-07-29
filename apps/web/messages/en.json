@@ -152,6 +152,10 @@
     "noSteps": "No steps executed.",
     "rollbackDesc": "Restores data based on the backup snapshot. DDL structural changes require manual handling.",
     "rollingBack": "Rolling back…",
+    "backupsUnavailable": "Could not load the backup list, so the rollback option stays hidden even if a backup exists. Please reload the page.",
+    "executionsUnavailable": "Could not load the apply history. This does not mean the change was never applied. Please reload the page to check.",
+    "applyHistoryTitle": "Apply history",
+    "staleContent": "Could not refresh this page, so the content below may be out of date.",
     "day": {
       "sun": "Sun",
       "mon": "Mon",

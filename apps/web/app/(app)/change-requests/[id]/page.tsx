@@ -684,9 +684,9 @@ function ApplyPanel({
   if (!roleAllowed) return null;
 
   const lintBlocked = lint?.maxSeverity === 'BLOCK';
-  // DEV는 서버가 BLOCK→WARN으로 강등(apps/api/src/apply/lint.engine.ts:89)하므로
-  // 린트 게이트 자체가 없다. 게이트가 없는 환경에서 조회 실패로 적용을 막으면
-  // 안전 이득 없이 빠른 반복 경로만 잠근다.
+  // DEV는 정책이 없을 때만 서버가 BLOCK→WARN으로 강등한다(기본값, apps/api/src/apply/lint.engine.ts:89).
+  // DEV에 BLOCK 정책이 명시적으로 저장돼 있으면 서버 게이트(apply.service.ts의 hasBlock, 환경 무관)가
+  // DEV도 막는다 — 그 경우 이 클라이언트 게이트는 의도적으로 느슨하며, 조회 실패 시 서버가 최종 방어선이다.
   const lintGateRequired = cr.targetEnv !== 'DEV';
 
   async function runDryRun() {

@@ -287,5 +287,7 @@ describe('apply panel', () => {
     // 적용 버튼 옆이 아니라 dry-run 영역 안에 있어야 한다.
     const applyButton = screen.getByRole('button', { name: 'Apply' });
     expect(dryRunBox.contains(applyButton)).toBe(false);
+    // 페이지 배너 등 다른 곳에 중복 렌더되지 않고 alert가 정확히 하나여야 한다.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 });

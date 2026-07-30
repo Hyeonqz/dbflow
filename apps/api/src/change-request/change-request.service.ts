@@ -81,7 +81,8 @@ const SUMMARY_SELECT = {
   reviewer: { select: { name: true, department: true } },
   approvers: {
     orderBy: { order: 'asc' },
-    select: { userId: true, decision: true, user: { select: { name: true } } },
+    // decidedById는 alreadyActed 판정에만 쓰이고 toSummary가 응답에 내보내지 않는다.
+    select: { userId: true, decision: true, decidedById: true, user: { select: { name: true } } },
   },
 } satisfies Prisma.ChangeRequestSelect;
 
@@ -139,6 +140,30 @@ export class ChangeRequestService {
       select: SUMMARY_SELECT,
     });
     return rows.map((row) => this.toSummary(row, user.userId, delegatorIds));
+  }
+
+  /**
+   * "내가 지금 결정할 수 있는 것" 목록. 오래 기다린 순.
+   * 필터를 toSummary 뒤에 두는 이유: myApprovalPending을 재구현하지 않고 그대로 써야
+   * KPI 카드가 세는 집합과 갈라지지 않는다. SQL로 옮기면 두 판정이 분기한다.
+   */
+  async inbox(user: AuthUser) {
+    // DEVELOPER·ADMIN은 결정할 것이 없다. visibilityWhere의 기본 분기는 실제 쿼리이므로 왕복을 아낀다.
+    if (user.role !== Role.REVIEWER && user.role !== Role.APPROVER) return [];
+    const delegatorIds = await this.delegatorIdsFor(user);
+    const rows = await this.prisma.changeRequest.findMany({
+      where: this.visibilityWhere(user, delegatorIds),
+      orderBy: { updatedAt: 'asc' },
+      select: SUMMARY_SELECT,
+    });
+    return rows
+      .map((row) => ({ row, summary: this.toSummary(row, user.userId, delegatorIds) }))
+      .filter(({ row, summary }) =>
+        user.role === Role.REVIEWER
+          ? summary.status === ChangeRequestStatus.SUBMITTED
+          : summary.myApprovalPending && !this.alreadyActed(row.approvers, user.userId),
+      )
+      .map(({ summary }) => summary);
   }
 
   async findOne(user: AuthUser, id: string) {
@@ -446,6 +471,24 @@ export class ChangeRequestService {
     };
   }
 
+  /**
+   * 이 사용자가 이 CR에서 이미 결정했는지(직접 또는 대리).
+   * approve()의 SoD 게이트가 두 번째 결재를 409로 거부하므로, 인박스는 이 술어로 걸러야 한다.
+   * toDetail의 iAlreadyActed와 동일 판정 — 두 곳이 갈라지지 않게 여기 하나만 둔다.
+   */
+  private alreadyActed(
+    approvers: { userId: string; decision: unknown; decidedById: string | null }[],
+    // string | undefined여야 한다. toDetail의 currentUserId는 optional이고 create()·
+    // applyTransition()이 actor 없이 호출하므로, required로 바꾸거나 `!`·`?? ''`로 우회하면
+    // 그 두 경로의 iAlreadyActed가 뒤집힌다(기존 단언 2건이 이를 잡는다).
+    currentUserId?: string,
+  ): boolean {
+    return (
+      approvers.some((a) => a.userId === currentUserId && a.decision !== null) ||
+      approvers.some((a) => a.decidedById === currentUserId)
+    );
+  }
+
   /** Flattens denormalized author/reviewer/approver/actor display names for the detail view. */
   private toDetail(
     changeRequest: DetailPayload,
@@ -453,9 +496,7 @@ export class ChangeRequestService {
     delegatorIds: string[] = [],
   ) {
     const { author, reviewer, approvers, statusHistory, ...rest } = changeRequest;
-    const actorAlreadyActed =
-      approvers.some((a) => a.userId === currentUserId && a.decision !== null) ||
-      approvers.some((a) => a.decidedById === currentUserId);
+    const actorAlreadyActed = this.alreadyActed(approvers, currentUserId);
     return {
       ...rest,
       authorName: author?.name ?? null,

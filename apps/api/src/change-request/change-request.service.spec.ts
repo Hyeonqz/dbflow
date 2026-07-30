@@ -1119,3 +1119,81 @@ describe('SoD guard — one actor fills at most one approver slot per CR', () =>
     });
   });
 });
+
+describe('inbox — 내가 지금 결정할 수 있는 것만', () => {
+  const submitted = {
+    id: 'cr-s', status: ChangeRequestStatus.SUBMITTED, authorId: 'u-dev',
+    reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date('2026-07-01'),
+    author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, approvers: [],
+  };
+  const reviewApproved = {
+    id: 'cr-a', status: ChangeRequestStatus.REVIEW_APPROVED, authorId: 'u-dev',
+    reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date('2026-07-02'),
+    author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' },
+    approvers: [{ userId: 'u-appr', decision: null, decidedById: null, user: { name: '결재자' } }],
+  };
+
+  it('REVIEWER에게 SUBMITTED만 준다 — 다른 상태 행을 섞어도 걸러진다', async () => {
+    const { service, findManyMock } = makeService();
+    findManyMock.mockResolvedValue([submitted, reviewApproved]);
+    const rows = await service.inbox({ userId: 'u-rev', role: Role.REVIEWER } as any);
+    expect(rows.map((r) => r.id)).toEqual(['cr-s']);
+  });
+
+  it('updatedAt 오름차순을 쿼리 인자로 요구한다', async () => {
+    // 이 스위트의 findMany mock은 orderBy를 무시하므로 결과 순서를 단언하면 픽스처를 검사하는 셈이다.
+    const { service, findManyMock } = makeService();
+    await service.inbox({ userId: 'u-rev', role: Role.REVIEWER } as any);
+    expect(findManyMock.mock.calls[0][0].orderBy).toEqual({ updatedAt: 'asc' });
+  });
+
+  it('APPROVER에게 myApprovalPending 항목을 준다', async () => {
+    const { service, findManyMock } = makeService();
+    findManyMock.mockResolvedValue([submitted, reviewApproved]);
+    const rows = await service.inbox({ userId: 'u-appr', role: Role.APPROVER } as any);
+    expect(rows.map((r) => r.id)).toEqual(['cr-a']);
+  });
+
+  it('SoD로 막힐 항목은 인박스에 없다 — 내가 다른 슬롯을 이미 결재한 경우', async () => {
+    // myApprovalPending은 true이지만 approve()가 409로 거부하므로 인박스에 떠서는 안 된다.
+    const { service, findManyMock } = makeService(undefined, {
+      activeDelegatorIds: async () => ['u-other'],
+      isActiveDelegateFor: async () => false,
+    });
+    findManyMock.mockResolvedValue([
+      {
+        ...reviewApproved,
+        approvers: [
+          { userId: 'u-appr', decision: 'APPROVE', decidedById: null, user: { name: '결재자' } },
+          { userId: 'u-other', decision: null, decidedById: null, user: { name: '위임자' } },
+        ],
+      },
+    ]);
+    const rows = await service.inbox({ userId: 'u-appr', role: Role.APPROVER } as any);
+    expect(rows).toEqual([]);
+  });
+
+  it('SoD로 막힐 항목은 인박스에 없다 — 내가 다른 슬롯을 대리 결재한 경우', async () => {
+    const { service, findManyMock } = makeService();
+    findManyMock.mockResolvedValue([
+      {
+        ...reviewApproved,
+        approvers: [
+          { userId: 'u-x', decision: 'APPROVE', decidedById: 'u-appr', user: { name: '타인' } },
+          { userId: 'u-appr', decision: null, decidedById: null, user: { name: '결재자' } },
+        ],
+      },
+    ]);
+    const rows = await service.inbox({ userId: 'u-appr', role: Role.APPROVER } as any);
+    expect(rows).toEqual([]);
+  });
+
+  it('DEVELOPER·ADMIN에게는 빈 배열이고 Prisma를 호출하지 않는다', async () => {
+    for (const role of [Role.DEVELOPER, Role.ADMIN]) {
+      const { service, findManyMock } = makeService();
+      const rows = await service.inbox({ userId: 'u-x', role } as any);
+      expect(rows).toEqual([]);
+      expect(findManyMock).not.toHaveBeenCalled();
+    }
+  });
+});

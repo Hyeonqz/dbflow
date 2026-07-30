@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTimeZone, useTranslations } from 'next-intl';
 import { useCurrentUser, type User } from '@/lib/auth';
+import { useInbox } from '@/components/inbox-context';
 import {
   applyChangeRequest,
   approveChangeRequest,
@@ -51,6 +52,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
   const locale = useLocale() as Locale;
   const t = useTranslations('changeRequestDetail');
   const { user, ready } = useCurrentUser();
+  const { refresh: refreshInbox } = useInbox();
   const [cr, setCr] = useState<ChangeRequestDetail | null>(null);
   const [executions, setExecutions] = useState<Execution[] | null>(null);
   const [backups, setBackups] = useState<Backup[]>([]);
@@ -66,6 +68,12 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
       })
       .catch((err: Error) => setError(err.message));
   }, [id]);
+
+  const afterAction = useCallback(async () => {
+    await load();
+    // 방금 처리한 항목이 배지에 남으면 사용자가 카운트를 신뢰하지 않게 된다.
+    await refreshInbox();
+  }, [load, refreshInbox]);
 
   const loadExecutions = useCallback(() => {
     return listExecutions(id)
@@ -163,17 +171,18 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
             {/* Right: actions + apply + history + status history */}
             <div className="flex flex-col gap-6">
-              <AssigneePanel cr={cr} user={user} onDone={load} />
+              <AssigneePanel cr={cr} user={user} onDone={afterAction} />
 
               <ApprovalProgressPanel cr={cr} />
 
-              <ActionPanel cr={cr} user={user} onDone={load} />
+              <ActionPanel cr={cr} user={user} onDone={afterAction} />
 
               <ApplyPanel
                 cr={cr}
                 user={user}
                 onApplied={async () => {
                   await Promise.all([load(), loadExecutions(), loadBackups()]);
+                  await refreshInbox();
                 }}
               />
 
@@ -185,6 +194,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
                 backupsNotice={backupsNotice}
                 onRolledBack={async () => {
                   await Promise.all([load(), loadExecutions(), loadBackups()]);
+                  await refreshInbox();
                 }}
               />
 

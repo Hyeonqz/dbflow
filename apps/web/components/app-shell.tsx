@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { useUser } from '@/components/user-context';
+import { InboxProvider } from '@/components/inbox-context';
 import { Sidebar } from '@/components/sidebar';
 import { MenuIcon } from '@/components/icons';
 
@@ -53,55 +54,57 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen lg:flex">
-      {/* 데스크톱: 고정 사이드바 */}
-      <aside
-        className={`hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 lg:sticky lg:top-0 lg:block lg:h-screen ${
-          collapsed ? 'lg:w-16' : 'lg:w-64'
-        }`}
-      >
-        <Sidebar user={user} collapsed={collapsed} onToggle={toggleCollapsed} />
-      </aside>
-
-      {/* 모바일: 상단바 */}
-      <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
-        <button
-          ref={triggerRef}
-          type="button"
-          aria-label={t('openMenu')}
-          aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen(true)}
-          className="focusable inline-flex h-11 w-11 items-center justify-center rounded-xl text-ink hover:bg-subtle"
+    <InboxProvider user={user}>
+      <div className="min-h-screen lg:flex">
+        {/* 데스크톱: 고정 사이드바 */}
+        <aside
+          className={`hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 lg:sticky lg:top-0 lg:block lg:h-screen ${
+            collapsed ? 'lg:w-16' : 'lg:w-64'
+          }`}
         >
-          <MenuIcon />
-        </button>
-        <span className="text-lg font-bold text-ink">DBFlow</span>
-      </header>
+          <Sidebar user={user} collapsed={collapsed} onToggle={toggleCollapsed} />
+        </aside>
 
-      {/* 모바일: 슬라이드 드로어 */}
-      {drawerOpen && (
-        <div className="lg:hidden">
-          <div
-            className="fixed inset-0 z-40 bg-black/40"
-            onClick={() => setDrawerOpen(false)}
-            aria-hidden
-          />
-          <div
-            ref={drawerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('menu')}
-            tabIndex={-1}
-            className="fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card outline-none"
+        {/* 모바일: 상단바 */}
+        <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
+          <button
+            ref={triggerRef}
+            type="button"
+            aria-label={t('openMenu')}
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen(true)}
+            className="focusable inline-flex h-11 w-11 items-center justify-center rounded-xl text-ink hover:bg-subtle"
           >
-            <Sidebar user={user} onNavigate={() => setDrawerOpen(false)} />
-          </div>
-        </div>
-      )}
+            <MenuIcon />
+          </button>
+          <span className="text-lg font-bold text-ink">DBFlow</span>
+        </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-        {children}
-      </main>
-    </div>
+        {/* 모바일: 슬라이드 드로어 */}
+        {drawerOpen && (
+          <div className="lg:hidden">
+            <div
+              className="fixed inset-0 z-40 bg-black/40"
+              onClick={() => setDrawerOpen(false)}
+              aria-hidden
+            />
+            <div
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('menu')}
+              tabIndex={-1}
+              className="fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card outline-none"
+            >
+              <Sidebar user={user} onNavigate={() => setDrawerOpen(false)} />
+            </div>
+          </div>
+        )}
+
+        <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+          {children}
+        </main>
+      </div>
+    </InboxProvider>
   );
 }

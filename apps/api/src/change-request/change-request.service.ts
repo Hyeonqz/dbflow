@@ -175,7 +175,23 @@ export class ChangeRequestService {
     if (!changeRequest) {
       throw new NotFoundException({ key: 'changeRequest.notFound' });
     }
-    return this.toDetail(changeRequest, user.userId, delegatorIds);
+    // 결재자별 루프가 아니라 단일 쿼리. 겹치는 위임이 가능하므로 orderBy로 결정적으로 고른다.
+    const approverIds = changeRequest.approvers.map((a) => a.userId);
+    const now = new Date();
+    const activeDelegations = approverIds.length
+      ? await this.prisma.delegation.findMany({
+          where: { delegatorId: { in: approverIds }, startsAt: { lte: now }, endsAt: { gt: now } },
+          orderBy: [{ startsAt: 'desc' }, { id: 'asc' }],
+          select: { delegatorId: true, delegate: { select: { name: true } } },
+        })
+      : [];
+    const delegateNameByDelegatorId = new Map<string, string>();
+    for (const d of activeDelegations) {
+      if (!delegateNameByDelegatorId.has(d.delegatorId) && d.delegate?.name) {
+        delegateNameByDelegatorId.set(d.delegatorId, d.delegate.name);
+      }
+    }
+    return this.toDetail(changeRequest, user.userId, delegatorIds, delegateNameByDelegatorId);
   }
 
   /** critic Minor4 — only reviewers/approvers can act as delegates; others short-circuit. */
@@ -521,6 +537,7 @@ export class ChangeRequestService {
     changeRequest: DetailPayload,
     currentUserId?: string,
     delegatorIds: string[] = [],
+    delegateNameByDelegatorId: Map<string, string> = new Map(),
   ) {
     const { author, reviewer, approvers, statusHistory, ...rest } = changeRequest;
     const actorAlreadyActed = this.alreadyActed(approvers, currentUserId);
@@ -537,6 +554,8 @@ export class ChangeRequestService {
         comment: a.comment,
         decidedAt: a.decidedAt,
         decidedBy: a.decidedBy?.name ?? null,
+        // 결정 전 위임 표시. 결정 후의 대리 표시는 위 decidedBy가 담당한다.
+        delegatedTo: delegateNameByDelegatorId.get(a.userId) ?? null,
       })),
       iAlreadyActed: actorAlreadyActed,
       canActAsDelegate:

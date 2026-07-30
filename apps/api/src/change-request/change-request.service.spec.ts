@@ -80,6 +80,7 @@ function makeService(stored?: StoredCr, delegation: any = delegationMock) {
     },
     statusHistory: { create: historyMock },
     auditLog: { create: jest.fn().mockResolvedValue({}) },
+    delegation: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn().mockImplementation((arg: any) =>
       typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
     ),
@@ -324,6 +325,89 @@ describe('ChangeRequestService', () => {
 
       expect(row.authorName).toBeNull();
       expect(row).not.toHaveProperty('author');
+    });
+  });
+
+  describe('delegatedTo — 결재자가 현재 위임 중인지', () => {
+    it('활성 위임 윈도우를 쿼리 인자로 요구한다', async () => {
+      // mock이 빈 배열을 주면 만료 위임도 null이 되므로, 결과가 아니라 where를 단언해야 한다.
+      const { service, prisma } = makeService({
+        id: 'cr-1', status: ChangeRequestStatus.REVIEW_APPROVED, authorId: 'u-dev',
+      });
+      prisma.changeRequest.findFirst.mockResolvedValue({
+        id: 'cr-1', status: ChangeRequestStatus.REVIEW_APPROVED, authorId: 'u-dev',
+        reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+        author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, files: [],
+        statusHistory: [],
+        approvers: [
+          { userId: 'u-a1', order: 0, decision: null, comment: null, decidedAt: null,
+            decidedById: null, decidedBy: null, user: { name: '결재자1', department: 'IT' } },
+        ],
+      });
+      prisma.delegation = { findMany: jest.fn().mockResolvedValue([]) };
+
+      await service.findOne({ userId: 'u-a1', role: Role.APPROVER } as any, 'cr-1');
+
+      const where = prisma.delegation.findMany.mock.calls[0][0].where;
+      expect(where.delegatorId).toEqual({ in: ['u-a1'] });
+      expect(where.startsAt).toHaveProperty('lte');
+      expect(where.endsAt).toHaveProperty('gt');
+    });
+
+    it('결재자별로 대결자 이름을 붙인다', async () => {
+      const { service, prisma } = makeService({
+        id: 'cr-1', status: ChangeRequestStatus.REVIEW_APPROVED, authorId: 'u-dev',
+      });
+      prisma.changeRequest.findFirst.mockResolvedValue({
+        id: 'cr-1', status: ChangeRequestStatus.REVIEW_APPROVED, authorId: 'u-dev',
+        reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+        author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, files: [],
+        statusHistory: [],
+        approvers: [
+          { userId: 'u-a1', order: 0, decision: null, comment: null, decidedAt: null,
+            decidedById: null, decidedBy: null, user: { name: '결재자1', department: 'IT' } },
+          { userId: 'u-a2', order: 1, decision: null, comment: null, decidedAt: null,
+            decidedById: null, decidedBy: null, user: { name: '결재자2', department: 'IT' } },
+        ],
+      });
+      prisma.delegation = {
+        findMany: jest.fn().mockResolvedValue([
+          { delegatorId: 'u-a1', delegate: { name: '대결자' } },
+        ]),
+      };
+
+      const detail = await service.findOne({ userId: 'u-a1', role: Role.APPROVER } as any, 'cr-1');
+      expect(detail.approvers.map((a: any) => a.delegatedTo)).toEqual(['대결자', null]);
+    });
+
+    it('겹치는 위임은 결정적으로 하나를 고른다(startsAt 내림차순 우선)', async () => {
+      const { service, prisma } = makeService({
+        id: 'cr-1', status: ChangeRequestStatus.REVIEW_APPROVED, authorId: 'u-dev',
+      });
+      prisma.changeRequest.findFirst.mockResolvedValue({
+        id: 'cr-1', status: ChangeRequestStatus.REVIEW_APPROVED, authorId: 'u-dev',
+        reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+        author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, files: [],
+        statusHistory: [],
+        approvers: [
+          { userId: 'u-a1', order: 0, decision: null, comment: null, decidedAt: null,
+            decidedById: null, decidedBy: null, user: { name: '결재자1', department: 'IT' } },
+        ],
+      });
+      // Delegation에 유니크 제약이 없어 겹침이 가능하다. orderBy가 첫 행을 결정한다.
+      prisma.delegation = {
+        findMany: jest.fn().mockResolvedValue([
+          { delegatorId: 'u-a1', delegate: { name: '최근' } },
+          { delegatorId: 'u-a1', delegate: { name: '이전' } },
+        ]),
+      };
+
+      const detail = await service.findOne({ userId: 'u-a1', role: Role.APPROVER } as any, 'cr-1');
+      expect(detail.approvers[0].delegatedTo).toBe('최근');
+      expect(prisma.delegation.findMany.mock.calls[0][0].orderBy).toEqual([
+        { startsAt: 'desc' },
+        { id: 'asc' },
+      ]);
     });
   });
 
@@ -767,6 +851,7 @@ function txPrisma(state: any) {
           approvers: state.approvers,
         }),
     },
+    delegation: { findMany: () => Promise.resolve([]) },
   };
 }
 

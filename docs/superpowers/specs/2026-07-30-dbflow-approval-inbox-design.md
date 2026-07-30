@@ -378,6 +378,21 @@ Slack의 배지 철학을 따른다: **숫자는 나에게 온 결정만** 센�
 12. **KPI 카드와 인박스의 카운트 불일치는 정상**이다(§7-3). 이를 "맞추려고" 카드를 조이면
     §9-1 위반이다.
 
+### 9-1. 실행으로 확인한 것
+
+- **기준선은 248개**(api 221 + web 27). 스크래치 probe 삭제 후 실행해 확인.
+- **api 스펙에 응답 shape 전체를 비교하는 단언이 없다.** `toStrictEqual`·`toMatchSnapshot`·
+  `Object.keys` 검색 결과 0건이고, `toSummary` 결과를 통째로 비교하는 곳도 없다. 따라서
+  요약에 `delegatedFrom`을 추가해도 기존 api 테스트를 깨지 않는다.
+- **`messages.test.ts`는 `flatKeys(ko).sort()`와 `flatKeys(en).sort()`를 `toEqual`로 비교**한다.
+  한쪽 카탈로그에만 키를 넣으면 반드시 실패한다 → §13 태스크 5는 en·ko를 한 태스크로 묶는다.
+- **`useUser()`는 provider 부재 시 실제로 throw한다**(`user-context.tsx`). §7-1이 금지하는
+  패턴이 바로 옆에 있으므로 구현자가 복사할 위험이 실재한다.
+- **`AppShell`은 `!ready || !user`일 때 조기 반환**한다. `InboxProvider`는 그 아래에 두어
+  사용자가 확정된 뒤에만 조회하게 한다.
+- **접힌 사이드바의 nav `Link`는 `aria-label`을 직접 갖고 `justify-center`이며 `relative`가
+  없다** — §7-2의 두 수정이 모두 필요함을 코드로 확인.
+
 ## 10. 신규 i18n 문자열
 
 전부 en/ko 양쪽에 추가한다. 카탈로그 대칭 테스트가 누락을 잡는다.

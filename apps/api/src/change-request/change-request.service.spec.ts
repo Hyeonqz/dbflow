@@ -370,6 +370,21 @@ describe('ChangeRequestService', () => {
       expect(rows[0].delegatedFrom).toBeNull();
     });
 
+    it('SUBMITTED에서 나는 다른 사람의 위임자지만 이 건의 검토자는 그 사람이 아니면 null이다', async () => {
+      // delegatorIds가 비어있지 않아 최상단 가드는 통과하지만, includes(reviewerId)는 거짓인 경우.
+      const delegation = { activeDelegatorIds: async () => ['u-someone-else'] };
+      const { service, findManyMock } = makeService(undefined, delegation);
+      findManyMock.mockResolvedValue([
+        {
+          id: 'cr-1', status: S.SUBMITTED, authorId: 'u-dev',
+          reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+          author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, approvers: [],
+        },
+      ]);
+      const rows: any = await service.list({ userId: 'u-other', role: Role.REVIEWER } as any);
+      expect(rows[0].delegatedFrom).toBeNull();
+    });
+
     it('REVIEW_APPROVED에서 내 미결정 슬롯이 있으면 null(자기 슬롯 우선)', async () => {
       const delegation = { activeDelegatorIds: async () => ['u-deleg'] };
       const { service, findManyMock } = makeService(undefined, delegation);

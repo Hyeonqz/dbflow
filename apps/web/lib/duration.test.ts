@@ -18,6 +18,9 @@ describe('waitUnit', () => {
   it('1시간 이상 24시간 미만은 시간 단위', () => {
     expect(waitUnit(ago(5 * HOUR), base)).toEqual({ unit: 'hours', count: 5 });
   });
+  it('정확히 1시간은 1시간', () => {
+    expect(waitUnit(ago(HOUR), base)).toEqual({ unit: 'hours', count: 1 });
+  });
   it('1시간 미만은 분 단위', () => {
     expect(waitUnit(ago(7 * MIN), base)).toEqual({ unit: 'minutes', count: 7 });
   });

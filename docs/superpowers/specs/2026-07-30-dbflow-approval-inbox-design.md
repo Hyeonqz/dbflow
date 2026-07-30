@@ -123,7 +123,7 @@ diff + 승인 무효화)이 요구하는 리비전 모델을 **두 번 설계**�
 | `REVIEW_APPROVED` | 결재 대기 `{approved}/{required}` |
 | `REVIEW_REJECTED` · `FINAL_REJECTED` | 반려됨 |
 | `FINAL_APPROVED` | 적용 대기 |
-| `APPLIED` | (목록에서 제외 — 막힌 것이 아니다) |
+| `APPLIED` | (막힌 지점 줄을 표시하지 않음 — 막힌 것이 아니다. **행 자체는 목록에 그대로 둔다**) |
 
 ## 5. 정렬 — `createdAt`이 아니라 `updatedAt` 오름차순
 
@@ -362,9 +362,6 @@ Slack의 배지 철학을 따른다: **숫자는 나에게 온 결정만** 센�
 4. **기존 가시성·SoD·위임 규칙을 재정의하지 않는다.** 인박스는 `visibilityWhere`를 재사용한다.
 5. **기존 테스트 248개가 전부 초록**(api 221 + web 27). 하나도 수정하지 않고 통과해야 한다 —
    기존 테스트를 고쳐야 한다면 그것은 계약을 깬 신호다.
-   (참고: `apps/web/lib/__plural_probe.test.ts`는 검수 중 ICU plural 문법을 실증하려고 만든
-   미추적 스크래치 파일이며 기준선이 아니다. 첫 태스크에서 삭제한다. 그 파일이 있으면 web이
-   29개로 보인다.)
 6. `apps/api`의 상태 머신·전이 테이블을 건드리지 않는다(E3 이월로 그 필요가 없어졌다).
 7. **CR 상세 페이지의 기존 테스트 19개가 무수정 통과한다.** `useInbox()`가 provider 없이
    throw하면 전부 깨진다(§7-1).
@@ -378,9 +375,38 @@ Slack의 배지 철학을 따른다: **숫자는 나에게 온 결정만** 센�
 12. **KPI 카드와 인박스의 카운트 불일치는 정상**이다(§7-3). 이를 "맞추려고" 카드를 조이면
     §9-1 위반이다.
 
+13. **개발자의 "최근" 목록에서 행이 사라지지 않는다.** §4 표의 `APPLIED` 행은 "막힌 지점 줄을
+    표시하지 않음"을 뜻하며 행 제외가 아니다. 모든 역할에서 최근 목록의 행 집합과 `createdAt`
+    내림차순 정렬이 그대로다. (지금 `card.developer.done`이 `FINAL_APPROVED || APPLIED`를 세므로,
+    행을 빼면 "완료 3" 옆에 그 3건이 없는 목록이 나온다.)
+14. **`InboxProvider`는 `AppShell` 반환 트리 전체를 감싼다** — 데스크톱 `<aside>`, 모바일 드로어,
+    `<main>` 셋 다 안쪽이어야 한다. `{children}`만 감싸면 두 `Sidebar`가 provider 밖에 남아
+    배지가 비-throw 기본값으로 **영구히 0을 읽고 아무 테스트도 실패하지 않는다**(§7-1의 비-throw
+    기본값이 이 실패를 조용하게 만들었다). `AppShell`을 REVIEWER로 렌더해 배지가 뜨는지 단언하는
+    테스트가 유일한 검출 수단이다.
+15. **`alreadyActed` 헬퍼는 `string | undefined`를 받고 `toDetail`의 `currentUserId`는 optional로
+    남는다.** `create()`와 `applyTransition()`(submit 경로)은 actor 없이 `toDetail`을 호출하므로
+    `iAlreadyActed`가 계속 `false`여야 한다. 기존 단언 2건이 무수정 통과해야 한다.
+    `currentUserId!`나 `?? ''`로 우회하지 않는다.
+16. **`GET /change-requests/inbox`가 200과 배열을 반환함을 supertest로 단언한다.**
+    api 스위트에 컨트롤러 테스트가 0개라 라우팅 순서 실수는 다른 검출 수단이 없다 — 틀리면
+    `inbox`가 `:id`로 캡처돼 런타임 404가 되고 수동 QA만 발견한다. 패턴은
+    `src/audit/audit-exception.filter.e2e-spec.ts`(`@nestjs/testing` + `supertest`, 둘 다 설치됨).
+17. **탭 타이틀 effect는 `InboxProvider`에 둔다 — 배지 컴포넌트가 아니다.** 데스크톱 `<aside>`는
+    CSS로만 숨겨져 항상 마운트돼 있으므로, 모바일 드로어를 열면 `Sidebar`가 **두 개 동시에** 산다.
+    배지에 effect를 두면 두 인스턴스가 하나의 전역(`document.title`)을 두고 경쟁한다.
+18. **provider의 fetch는 기존 `active` 플래그 패턴을 따른다.** `next.config.js`가
+    `reactStrictMode: true`라 개발 중 effect가 두 번 실행된다. 이 패턴은 대시보드·목록 화면에
+    이미 있으니 재사용이지 새 장치가 아니다.
+19. **인박스 섹션은 `items !== null` 분기 밖에서 자체 loading 상태로 렌더된다.** 그리고
+    **provider는 error 필드를 노출하지 않는다.** 대시보드에는 `error` 상태가 하나뿐이고
+    `items === null && error`면 본문의 두 분기가 모두 false가 되어 화면이 빈다 — 인박스 실패가
+    거기로 새면 목록이 아직 오는 중일 때 대시보드 본문 전체가 사라진다. provider가 error를
+    노출하지 않는 것이 이 구멍을 구조적으로 막는 장치이므로, 나중에 "개선"으로 추가하지 않는다.
+
 ### 9-1. 실행으로 확인한 것
 
-- **기준선은 248개**(api 221 + web 27). 스크래치 probe 삭제 후 실행해 확인.
+- **기준선은 248개**(api 221 + web 27). 실행해 확인.
 - **api 스펙에 응답 shape 전체를 비교하는 단언이 없다.** `toStrictEqual`·`toMatchSnapshot`·
   `Object.keys` 검색 결과 0건이고, `toSummary` 결과를 통째로 비교하는 곳도 없다. 따라서
   요약에 `delegatedFrom`을 추가해도 기존 api 테스트를 깨지 않는다.
@@ -402,8 +428,6 @@ Slack의 배지 철학을 따른다: **숫자는 나에게 온 결정만** 센�
 - `inbox.empty` — "결정 대기 중인 변경요청이 없습니다." / "No change requests are waiting on your decision."
 - `inbox.waitingFor` — "{duration} 대기" / "waiting {duration}"
 - `inbox.delegatedFrom` — "위임: {name} 대리" / "Delegated from {name}"
-- `myRequests.title` — "내 요청" / "My requests"
-- `myRequests.empty` — "진행 중인 요청이 없습니다." / "No requests in progress."
 - `blocked.draft` — "제출 대기 — 당신 차례입니다" / "Waiting to be submitted — your turn"
 - `blocked.review` — "검토 대기: {name}" / "Waiting for review by {name}"
 - `blocked.approval` — "결재 대기 {approved}/{required}" / "Awaiting approval {approved}/{required}"
@@ -464,8 +488,10 @@ ICU plural 문법이 이 프로젝트의 next-intl 버전에서 실제로 동작
 - 탭 타이틀에 카운트 미러링, **그리고 라우트 이동 후에도 유지됨**(§7-2)
 - 인박스 조회가 실패하면 배지가 없고 셸이 정상 렌더됨(§7-1)
 - 개발자의 "최근" 목록 행에 상태별 "막힌 지점"이 정확히 표시
-- 대기 기간 헬퍼 단위 테스트(일/시간/분 경계, ICU plural) — 여기서 스크래치 probe의
-  두 단언을 흡수하고 그 파일을 삭제한다
+- 대기 기간 헬퍼 단위 테스트(일/시간/분 경계, ICU plural)
+- **`locale="ko"` + `ko.json`으로도 렌더하는 테스트 1건.** 현재 `renderWithIntl`은 en 카탈로그를
+  하드코딩하고 있어 **어떤 테스트도 ko를 렌더하지 않는다.** 카탈로그 대칭 테스트는 키 *이름*만
+  비교하므로 ICU 본문이 깨져도 초록으로 배포된다. §10의 ko plural이 이 프로젝트의 첫 plural이다.
 
 **`refresh()` 검증은 나누어 한다.** "결재 성공 후 배지가 줄어든다"를 상세 페이지에서 단언하려
 하면 상세 페이지에 사이드바가 없어 **mock이 mock을 검사**하는 형태가 된다. 대신:
@@ -484,6 +510,12 @@ ICU plural 문법이 이 프로젝트의 next-intl 버전에서 실제로 동작
 - **관리자 대시보드**(G9, 5단계) — ADMIN은 현행대로 리다이렉트.
 - **알림 발송**(D1) — API에 인프라가 0이다. 배지·인박스가 "알림"의 역할을 대신한다.
 - **넛지·SLA 리마인더**(E4, 4단계) — 스케줄러와 발송 채널이 선행돼야 한다.
+- **배지의 refetch-on-focus·폴링** — 마운트 시 1회 조회와 결재 후 `refresh()`만 한다. 탭을
+  오후 내내 열어둔 검토자는 낡은 카운트를 보고, 그 사이 제출된 CR은 새로고침 전까지 안 보인다.
+  이 슬라이스에서 수용하는 한계다. 요청량은 이미 작다 — 로그인 1회 + 내비게이션 5회 + 결재 3회
+  세션이 4요청이고(개발자·관리자는 0), 그 5회 내비게이션이 이미 유발하는 전체 목록 조회보다 적다.
+  기록하는 이유: 다음 사람이 모든 인증 페이지 뒤에 있는 엔드포인트에 `setInterval`을 걸지 않고
+  **visibility 기반 refetch**를 택하게 하기 위함이다.
 - **Delegation 중복 윈도우 제약** — 현재 `Delegation`에 유니크·배제 제약이 전혀 없어 한
   위임자가 겹치는 활성 위임을 여러 개 가질 수 있고, `isActiveDelegateFor`는 그 전부를
   인정한다. 이 슬라이스는 `delegatedFrom`(슬롯 `order` 오름차순)과 `delegatedTo`
@@ -496,8 +528,8 @@ ICU plural 문법이 이 프로젝트의 next-intl 버전에서 실제로 동작
 스펙이 암시하지만 명시하지 않았던 순서를 기록한다. 구현 계획은 이 순서를 따른다.
 
 1. **API `inbox()` + `GET /change-requests/inbox`** — `@Get(':id')`보다 먼저 선언.
-   `alreadyActed` 공용 헬퍼 추출(§2-1), `SUMMARY_SELECT`에 `decidedById` 추가.
-   이 태스크에서 스크래치 probe 파일도 삭제한다(§9-5).
+   `alreadyActed` 공용 헬퍼 추출(§2-1), `SUMMARY_SELECT`에 `decidedById` 추가,
+   라우팅 순서를 잡는 supertest 1건(§9-16).
 2. **API `delegatedFrom`** — `delegatorIds` 기준, 상태별 분기(§6-2).
 3. **API `delegatedTo`** — 단일 쿼리, 결정적 tie-break(§6-3).
 4. **Web `lib/api.ts`** — `listInbox()`, Summary에 `delegatedFrom`, **Detail의 `Omit`에 추가**,

@@ -452,6 +452,32 @@ export class ChangeRequestService {
     return this.toDetail(refreshed);
   }
 
+  /**
+   * 위임을 통해서만 내 범위에 든 항목의 위임자 이름. 내 것이면 null.
+   * 역할이 아니라 delegatorIds로 판정하는 이유: 이 필드는 모든 역할이 같은 코드 경로로 받는
+   * 요약 타입에 붙는다. 역할별 규칙으로 쓰면 개발자 자신의 CR이 전부 "위임"으로 표시된다.
+   * delegatorIds는 REVIEWER·APPROVER가 아닌 역할에 []이므로 구조적으로 null이 된다.
+   */
+  private delegatedFromFor(
+    row: SummaryPayload,
+    currentUserId: string,
+    delegatorIds: string[],
+  ): string | null {
+    if (!delegatorIds.length) return null;
+    if (row.status === ChangeRequestStatus.SUBMITTED) {
+      return delegatorIds.includes(row.reviewerId ?? '') ? (row.reviewer?.name ?? null) : null;
+    }
+    if (row.status === ChangeRequestStatus.REVIEW_APPROVED) {
+      // approve()와 같은 우선순위: 자기 미결정 슬롯이 있으면 그것으로 결재하므로 위임이 아니다.
+      if (row.approvers.some((a) => a.userId === currentUserId && a.decision === null)) return null;
+      const viaDelegation = row.approvers.find(
+        (a) => delegatorIds.includes(a.userId) && a.decision === null,
+      );
+      return viaDelegation?.user?.name ?? null;
+    }
+    return null;
+  }
+
   /** Flattens the joined author/reviewer names and approver decisions onto a summary row. */
   private toSummary(row: SummaryPayload, currentUserId: string, delegatorIds: string[] = []) {
     const { author, reviewer, approvers, ...rest } = row;
@@ -468,6 +494,7 @@ export class ChangeRequestService {
           (a) =>
             (a.userId === currentUserId || delegatorIds.includes(a.userId)) && a.decision === null,
         ),
+      delegatedFrom: this.delegatedFromFor(row, currentUserId, delegatorIds),
     };
   }
 

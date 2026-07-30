@@ -326,6 +326,101 @@ describe('ChangeRequestService', () => {
       expect(row).not.toHaveProperty('author');
     });
   });
+
+  describe('delegatedFrom — 위임으로 넘어온 항목만 표시', () => {
+    it('개발자 자신의 목록에서는 항상 null이다', async () => {
+      // delegatorIds가 []이므로 구조적으로 null. 역할별 규칙으로 쓰면 여기서 오염된다.
+      const { service, findManyMock } = makeService();
+      findManyMock.mockResolvedValue([
+        {
+          id: 'cr-1', status: S.SUBMITTED, authorId: 'u-dev',
+          reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+          author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, approvers: [],
+        },
+      ]);
+      const rows: any = await service.list({ userId: 'u-dev', role: Role.DEVELOPER } as any);
+      expect(rows[0].delegatedFrom).toBeNull();
+    });
+
+    it('SUBMITTED에서 검토자가 내 위임자면 그 이름을 준다', async () => {
+      const delegation = { activeDelegatorIds: async () => ['u-rev'] };
+      const { service, findManyMock } = makeService(undefined, delegation);
+      findManyMock.mockResolvedValue([
+        {
+          id: 'cr-1', status: S.SUBMITTED, authorId: 'u-dev',
+          reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+          author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, approvers: [],
+        },
+      ]);
+      const rows: any = await service.list({ userId: 'u-other', role: Role.REVIEWER } as any);
+      expect(rows[0].delegatedFrom).toBe('검토자');
+    });
+
+    it('SUBMITTED에서 검토자가 나 자신이면 null이다', async () => {
+      const delegation = { activeDelegatorIds: async () => [] };
+      const { service, findManyMock } = makeService(undefined, delegation);
+      findManyMock.mockResolvedValue([
+        {
+          id: 'cr-1', status: S.SUBMITTED, authorId: 'u-dev',
+          reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+          author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, approvers: [],
+        },
+      ]);
+      const rows: any = await service.list({ userId: 'u-rev', role: Role.REVIEWER } as any);
+      expect(rows[0].delegatedFrom).toBeNull();
+    });
+
+    it('REVIEW_APPROVED에서 내 미결정 슬롯이 있으면 null(자기 슬롯 우선)', async () => {
+      const delegation = { activeDelegatorIds: async () => ['u-deleg'] };
+      const { service, findManyMock } = makeService(undefined, delegation);
+      findManyMock.mockResolvedValue([
+        {
+          id: 'cr-1', status: S.REVIEW_APPROVED, authorId: 'u-dev',
+          reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+          author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' },
+          approvers: [
+            { userId: 'u-appr', decision: null, decidedById: null, user: { name: '나' } },
+            { userId: 'u-deleg', decision: null, decidedById: null, user: { name: '위임자' } },
+          ],
+        },
+      ]);
+      const rows: any = await service.list({ userId: 'u-appr', role: Role.APPROVER } as any);
+      expect(rows[0].delegatedFrom).toBeNull();
+    });
+
+    it('REVIEW_APPROVED에서 내 슬롯이 없으면 위임자 슬롯(order 오름차순 첫) 이름', async () => {
+      const delegation = { activeDelegatorIds: async () => ['u-d1', 'u-d2'] };
+      const { service, findManyMock } = makeService(undefined, delegation);
+      findManyMock.mockResolvedValue([
+        {
+          id: 'cr-1', status: S.REVIEW_APPROVED, authorId: 'u-dev',
+          reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+          author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' },
+          // SUMMARY_SELECT가 order asc로 정렬해 주므로 배열 순서가 곧 order다.
+          approvers: [
+            { userId: 'u-d1', decision: null, decidedById: null, user: { name: '위임자1' } },
+            { userId: 'u-d2', decision: null, decidedById: null, user: { name: '위임자2' } },
+          ],
+        },
+      ]);
+      const rows: any = await service.list({ userId: 'u-appr', role: Role.APPROVER } as any);
+      expect(rows[0].delegatedFrom).toBe('위임자1');
+    });
+
+    it('그 외 상태에서는 null이다', async () => {
+      const delegation = { activeDelegatorIds: async () => ['u-rev'] };
+      const { service, findManyMock } = makeService(undefined, delegation);
+      findManyMock.mockResolvedValue([
+        {
+          id: 'cr-1', status: S.APPLIED, authorId: 'u-dev',
+          reviewerId: 'u-rev', createdAt: new Date(), updatedAt: new Date(),
+          author: { name: '개발자' }, reviewer: { name: '검토자', department: 'DBA' }, approvers: [],
+        },
+      ]);
+      const rows: any = await service.list({ userId: 'u-other', role: Role.REVIEWER } as any);
+      expect(rows[0].delegatedFrom).toBeNull();
+    });
+  });
 });
 
 /** Prisma mock with only `findUnique` + submit/approve plumbing (policy, approver count). */

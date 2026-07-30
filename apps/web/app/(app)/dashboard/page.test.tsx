@@ -90,4 +90,48 @@ describe('dashboard inbox', () => {
     renderPage();
     expect(await screen.findByText('Waiting for review by 김검토')).toBeInTheDocument();
   });
+
+  it('renders inbox items while the slower change-request list is still pending', async () => {
+    let resolveList!: (value: api.ChangeRequestSummary[]) => void;
+    vi.mocked(api.listChangeRequests).mockReturnValue(
+      new Promise<api.ChangeRequestSummary[]>((resolve) => {
+        resolveList = resolve;
+      }),
+    );
+    inbox.value = {
+      ...inbox.value,
+      items: [makeSummary({ id: 'cr-fast', title: 'Fast inbox item' })],
+    };
+    renderPage();
+
+    const section = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section') as HTMLElement;
+    expect(within(section).getByRole('link', { name: /Fast inbox item/ })).toBeInTheDocument();
+
+    resolveList([]);
+    await screen.findByText('No change requests yet.');
+  });
+
+  it('keeps an APPLIED request in the recent list without a blocked-status line', async () => {
+    signIn(makeUser({ role: 'DEVELOPER' }));
+    vi.mocked(api.listChangeRequests).mockResolvedValue([
+      makeSummary({ id: 'cr-applied', title: 'Applied change', status: 'APPLIED' }),
+    ]);
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: /Applied change/ });
+    const row = link.closest('li') as HTMLElement;
+    expect(row).toBeInTheDocument();
+    expect(row.querySelector('p.text-xs.text-muted')).toBeNull();
+  });
+
+  it("renders the inbox wait duration from the fixture's actual elapsed time", async () => {
+    const threeDaysAgo = new Date(Date.now() - (3 * 24 + 1) * 60 * 60 * 1000).toISOString();
+    inbox.value = {
+      ...inbox.value,
+      items: [makeSummary({ id: 'cr-3d', title: 'Three days old', updatedAt: threeDaysAgo })],
+    };
+    renderPage();
+    const section = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section') as HTMLElement;
+    expect(within(section).getByText('waiting 3 days')).toBeInTheDocument();
+  });
 });

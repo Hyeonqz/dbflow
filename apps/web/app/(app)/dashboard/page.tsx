@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import type { Locale } from '@/i18n/config';
 import { useUser } from '@/components/user-context';
+import { useInbox } from '@/components/inbox-context';
 import { listChangeRequests, type ChangeRequestSummary } from '@/lib/api';
 import { EnvBadge, StatusBadge } from '@/components/badges';
 import { formatDateTime } from '@/lib/format';
+import { waitUnit } from '@/lib/duration';
 import { PageHeader } from '@/components/page-header';
 import { StatCard } from '@/components/stat-card';
 
@@ -93,11 +95,42 @@ function buildSummary(
   return t(SUMMARY_KEY[role], { count: n });
 }
 
+/** §4 표 — 요약 필드만으로 파생. APPLIED는 막힌 것이 아니므로 표시하지 않는다. */
+function blockedLabel(
+  cr: ChangeRequestSummary,
+  t: ReturnType<typeof useTranslations<'dashboard'>>,
+  unassigned: string,
+): string | null {
+  switch (cr.status) {
+    case 'DRAFT':
+      return t('blocked.draft');
+    case 'SUBMITTED':
+      return t('blocked.review', { name: cr.reviewerName ?? unassigned });
+    case 'REVIEW_APPROVED':
+      return t('blocked.approval', {
+        approved: cr.approvalProgress.approved,
+        required: cr.approvalProgress.required,
+      });
+    case 'REVIEW_REJECTED':
+    case 'FINAL_REJECTED':
+      return t('blocked.rejected');
+    case 'FINAL_APPROVED':
+      return t('blocked.apply');
+    default:
+      return null;
+  }
+}
+
 export default function Dashboard() {
   const t = useTranslations('dashboard');
   const tEnum = useTranslations('enum');
+  const tCommon = useTranslations('common');
+  // 기존 카탈로그 키를 재사용 — dashboard.blocked에는 "미지정"이 없고, changeRequestDetail에는 있다.
+  const tDetail = useTranslations('changeRequestDetail');
   const locale = useLocale() as Locale;
   const { user, ready } = useUser();
+  const { items: inboxItems } = useInbox();
+  const canDecide = user?.role === 'REVIEWER' || user?.role === 'APPROVER';
   const router = useRouter();
   const [items, setItems] = useState<ChangeRequestSummary[] | null>(null);
   const [error, setError] = useState('');
@@ -157,6 +190,41 @@ export default function Dashboard() {
         </p>
       )}
 
+      {canDecide && (
+        <section>
+          <h2 className="text-base font-semibold text-ink">{t('inbox.title')}</h2>
+          {inboxItems.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">{t('inbox.empty')}</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {inboxItems.map((cr) => {
+                const w = waitUnit(cr.updatedAt);
+                return (
+                  <li key={cr.id}>
+                    <Link
+                      href={`/change-requests/${cr.id}`}
+                      className="focusable flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-card px-4 py-3 ring-1 ring-border transition-colors hover:bg-subtle"
+                    >
+                      <span className="font-medium text-ink">{cr.title}</span>
+                      <EnvBadge env={cr.targetEnv} />
+                      <time dateTime={cr.updatedAt} className="text-xs text-muted">
+                        {t('inbox.waitingFor', { duration: tCommon(`duration.${w.unit}`, { count: w.count }) })}
+                      </time>
+                      {cr.delegatedFrom && (
+                        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                          {t('inbox.delegatedFrom', { name: cr.delegatedFrom })}
+                        </span>
+                      )}
+                      <StatusBadge status={cr.status} />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
       {items === null && !error ? (
         <DashboardSkeleton bodyOnly />
       ) : (
@@ -200,6 +268,10 @@ export default function Dashboard() {
                           <p className="mt-0.5 truncate text-sm text-muted">
                             {it.authorName ?? it.authorId} · {formatDateTime(it.createdAt, locale)}
                           </p>
+                          {user.role === 'DEVELOPER' &&
+                            blockedLabel(it, t, tDetail('unassigned')) && (
+                              <p className="text-xs text-muted">{blockedLabel(it, t, tDetail('unassigned'))}</p>
+                            )}
                         </div>
                         <EnvBadge env={it.targetEnv} />
                         <StatusBadge status={it.status} />

@@ -40,6 +40,20 @@ describe('sidebar inbox badge', () => {
     expect(screen.getByRole('link', { name: /3 awaiting your decision/ })).toBeInTheDocument();
   });
 
+  it('positions the collapsed link relatively so the absolutely-positioned badge anchors to it', () => {
+    inbox.value = { ...inbox.value, count: 3 };
+    renderWithIntl(<Sidebar user={makeUser({ role: 'REVIEWER' })} collapsed />);
+    expect(screen.getByRole('link', { name: /3 awaiting your decision/ })).toHaveClass('relative');
+  });
+
+  it('exposes the count in the accessible name when expanded, not just as visible text', () => {
+    // getByText('3') below only proves a text node exists — it says nothing about
+    // what a screen reader announces. The badge needs its own aria-label here.
+    inbox.value = { ...inbox.value, count: 3 };
+    renderWithIntl(<Sidebar user={makeUser({ role: 'REVIEWER' })} />);
+    expect(screen.getByRole('link', { name: /3 awaiting your decision/ })).toBeInTheDocument();
+  });
+
   it('has no badge for a developer', () => {
     inbox.value = { ...inbox.value, count: 3 };
     renderWithIntl(<Sidebar user={makeUser({ role: 'DEVELOPER' })} />);

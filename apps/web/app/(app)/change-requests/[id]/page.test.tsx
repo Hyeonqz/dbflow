@@ -25,6 +25,14 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// The page wires its refresh() (not load()) into afterAction so a just-approved
+// item stops lingering in the sidebar badge. Spy on refresh so a decision test
+// can assert that wiring without pulling in the real InboxProvider/API.
+const { inboxRefresh } = vi.hoisted(() => ({ inboxRefresh: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/components/inbox-context', () => ({
+  useInbox: () => ({ items: [], count: 0, loading: false, refresh: inboxRefresh }),
+}));
+
 // importOriginal로 스프레드해야 ApiError 클래스가 살아남는다(instanceof 비교에 쓰임).
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
@@ -393,5 +401,16 @@ describe('stale content banner', () => {
     expect(banner).toHaveTextContent('Request failed. (500)');
     // 아직 아무것도 못 불러왔으므로 "아래 내용이 낡았다"고 말할 대상이 없다.
     expect(banner).not.toHaveTextContent('may be out of date');
+  });
+});
+
+describe('inbox refresh wiring', () => {
+  it('calls useInbox().refresh() after a successful decision, so the badge drops the item', async () => {
+    vi.mocked(api.submitChangeRequest).mockResolvedValue(makeCr({ status: 'SUBMITTED' }));
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Request review' }));
+
+    await waitFor(() => expect(inboxRefresh).toHaveBeenCalled());
   });
 });

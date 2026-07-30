@@ -5,7 +5,7 @@
     "start:dev": "nest start --watch",
     "build": "nest build",
     "test": "TZ=Asia/Seoul jest",
-    "test:e2e": "TZ=Asia/Seoul jest --testRegex \\.e2e-spec\\.ts$",
+    "test:e2e": "TZ=Asia/Seoul jest --testRegex \\.e2e\\.spec\\.ts$",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },

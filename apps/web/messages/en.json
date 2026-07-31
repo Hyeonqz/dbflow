@@ -9,7 +9,12 @@
     "openMenu": "Open menu",
     "menu": "Menu",
     "collapseSidebar": "Collapse sidebar",
-    "expandSidebar": "Expand sidebar"
+    "expandSidebar": "Expand sidebar",
+    "duration": {
+      "days": "{count, plural, one {# day} other {# days}}",
+      "hours": "{count, plural, one {# hour} other {# hours}}",
+      "minutes": "{count, plural, one {# minute} other {# minutes}}"
+    }
   },
   "login": {
     "heading": "Sign in",
@@ -36,7 +41,8 @@
     "audit": "Audit Log",
     "sqlReview": "SQL Review Policy",
     "approvalPolicy": "Approval Policy",
-    "applySchedule": "Apply Window / Freeze"
+    "applySchedule": "Apply Window / Freeze",
+    "inboxBadgeAria": "{count} awaiting your decision"
   },
   "enum": {
     "status": {
@@ -156,6 +162,7 @@
     "executionsUnavailable": "Could not load the apply history. This does not mean the change was never applied. Please reload the page to check.",
     "applyHistoryTitle": "Apply history",
     "staleContent": "Could not refresh this page, so the content below may be out of date.",
+    "delegatingNow": "Delegating",
     "day": {
       "sun": "Sun",
       "mon": "Mon",
@@ -394,7 +401,20 @@
     },
     "recentTitle": "Recent change requests",
     "viewAll": "View all →",
-    "emptyRecent": "No change requests yet."
+    "emptyRecent": "No change requests yet.",
+    "inbox": {
+      "title": "Waiting on you",
+      "empty": "No change requests are waiting on your decision.",
+      "waitingFor": "waiting {duration}",
+      "delegatedFrom": "Delegated from {name}"
+    },
+    "blocked": {
+      "draft": "Waiting to be submitted — your turn",
+      "review": "Waiting for review by {name}",
+      "approval": "Awaiting approval {approved}/{required}",
+      "rejected": "Rejected",
+      "apply": "Waiting to be applied"
+    }
   },
   "users": {
     "loading": "Loading…",

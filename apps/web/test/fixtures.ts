@@ -1,6 +1,7 @@
 import type {
   Backup,
   ChangeRequestDetail,
+  ChangeRequestSummary,
   Execution,
   LintResult,
   TargetDatabase,
@@ -45,6 +46,26 @@ export function makeCr(over: Partial<ChangeRequestDetail> = {}): ChangeRequestDe
     approvers: [],
     canActAsDelegate: false,
     iAlreadyActed: false,
+    ...over,
+  };
+}
+
+export function makeSummary(over: Partial<ChangeRequestSummary> = {}): ChangeRequestSummary {
+  return {
+    id: 'cr1',
+    title: 'Add index on orders',
+    targetEnv: 'DEV',
+    status: 'SUBMITTED',
+    authorId: 'u-dev',
+    authorName: 'Dev',
+    reviewerId: 'u-rev',
+    reviewerName: 'Rev',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    approverNames: [],
+    approvalProgress: { approved: 0, required: 0 },
+    myApprovalPending: false,
+    delegatedFrom: null,
     ...over,
   };
 }

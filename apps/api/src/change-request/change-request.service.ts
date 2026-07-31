@@ -81,7 +81,8 @@ const SUMMARY_SELECT = {
   reviewer: { select: { name: true, department: true } },
   approvers: {
     orderBy: { order: 'asc' },
-    select: { userId: true, decision: true, user: { select: { name: true } } },
+    // decidedById는 alreadyActed 판정에만 쓰이고 toSummary가 응답에 내보내지 않는다.
+    select: { userId: true, decision: true, decidedById: true, user: { select: { name: true } } },
   },
 } satisfies Prisma.ChangeRequestSelect;
 
@@ -141,6 +142,30 @@ export class ChangeRequestService {
     return rows.map((row) => this.toSummary(row, user.userId, delegatorIds));
   }
 
+  /**
+   * "내가 지금 결정할 수 있는 것" 목록. 오래 기다린 순.
+   * 필터를 toSummary 뒤에 두는 이유: myApprovalPending을 재구현하지 않고 그대로 써야
+   * KPI 카드가 세는 집합과 갈라지지 않는다. SQL로 옮기면 두 판정이 분기한다.
+   */
+  async inbox(user: AuthUser) {
+    // DEVELOPER·ADMIN은 결정할 것이 없다. visibilityWhere의 기본 분기는 실제 쿼리이므로 왕복을 아낀다.
+    if (user.role !== Role.REVIEWER && user.role !== Role.APPROVER) return [];
+    const delegatorIds = await this.delegatorIdsFor(user);
+    const rows = await this.prisma.changeRequest.findMany({
+      where: this.visibilityWhere(user, delegatorIds),
+      orderBy: { updatedAt: 'asc' },
+      select: SUMMARY_SELECT,
+    });
+    return rows
+      .map((row) => ({ row, summary: this.toSummary(row, user.userId, delegatorIds) }))
+      .filter(({ row, summary }) =>
+        user.role === Role.REVIEWER
+          ? summary.status === ChangeRequestStatus.SUBMITTED
+          : summary.myApprovalPending && !this.alreadyActed(row.approvers, user.userId),
+      )
+      .map(({ summary }) => summary);
+  }
+
   async findOne(user: AuthUser, id: string) {
     const delegatorIds = await this.delegatorIdsFor(user);
     const changeRequest = await this.prisma.changeRequest.findFirst({
@@ -150,7 +175,23 @@ export class ChangeRequestService {
     if (!changeRequest) {
       throw new NotFoundException({ key: 'changeRequest.notFound' });
     }
-    return this.toDetail(changeRequest, user.userId, delegatorIds);
+    // 결재자별 루프가 아니라 단일 쿼리. 겹치는 위임이 가능하므로 orderBy로 결정적으로 고른다.
+    const approverIds = changeRequest.approvers.map((a) => a.userId);
+    const now = new Date();
+    const activeDelegations = approverIds.length
+      ? await this.prisma.delegation.findMany({
+          where: { delegatorId: { in: approverIds }, startsAt: { lte: now }, endsAt: { gt: now } },
+          orderBy: [{ startsAt: 'desc' }, { id: 'asc' }],
+          select: { delegatorId: true, delegate: { select: { name: true } } },
+        })
+      : [];
+    const delegateNameByDelegatorId = new Map<string, string>();
+    for (const d of activeDelegations) {
+      if (!delegateNameByDelegatorId.has(d.delegatorId) && d.delegate?.name) {
+        delegateNameByDelegatorId.set(d.delegatorId, d.delegate.name);
+      }
+    }
+    return this.toDetail(changeRequest, user.userId, delegatorIds, delegateNameByDelegatorId);
   }
 
   /** critic Minor4 — only reviewers/approvers can act as delegates; others short-circuit. */
@@ -427,6 +468,32 @@ export class ChangeRequestService {
     return this.toDetail(refreshed);
   }
 
+  /**
+   * 위임을 통해서만 내 범위에 든 항목의 위임자 이름. 내 것이면 null.
+   * 역할이 아니라 delegatorIds로 판정하는 이유: 이 필드는 모든 역할이 같은 코드 경로로 받는
+   * 요약 타입에 붙는다. 역할별 규칙으로 쓰면 개발자 자신의 CR이 전부 "위임"으로 표시된다.
+   * delegatorIds는 REVIEWER·APPROVER가 아닌 역할에 []이므로 구조적으로 null이 된다.
+   */
+  private delegatedFromFor(
+    row: SummaryPayload,
+    currentUserId: string,
+    delegatorIds: string[],
+  ): string | null {
+    if (!delegatorIds.length) return null;
+    if (row.status === ChangeRequestStatus.SUBMITTED) {
+      return delegatorIds.includes(row.reviewerId ?? '') ? (row.reviewer?.name ?? null) : null;
+    }
+    if (row.status === ChangeRequestStatus.REVIEW_APPROVED) {
+      // approve()와 같은 우선순위: 자기 미결정 슬롯이 있으면 그것으로 결재하므로 위임이 아니다.
+      if (row.approvers.some((a) => a.userId === currentUserId && a.decision === null)) return null;
+      const viaDelegation = row.approvers.find(
+        (a) => delegatorIds.includes(a.userId) && a.decision === null,
+      );
+      return viaDelegation?.user?.name ?? null;
+    }
+    return null;
+  }
+
   /** Flattens the joined author/reviewer names and approver decisions onto a summary row. */
   private toSummary(row: SummaryPayload, currentUserId: string, delegatorIds: string[] = []) {
     const { author, reviewer, approvers, ...rest } = row;
@@ -443,7 +510,28 @@ export class ChangeRequestService {
           (a) =>
             (a.userId === currentUserId || delegatorIds.includes(a.userId)) && a.decision === null,
         ),
+      delegatedFrom: this.delegatedFromFor(row, currentUserId, delegatorIds),
     };
+  }
+
+  /**
+   * 이 사용자가 이 CR에서 이미 결정했는지(직접 또는 대리).
+   * approve()의 SoD 게이트가 두 번째 결재를 409로 거부하므로, 인박스는 이 술어로 걸러야 한다.
+   * toDetail의 iAlreadyActed와 동일 판정 — 두 곳이 갈라지지 않게 여기 하나만 둔다.
+   */
+  private alreadyActed(
+    approvers: { userId: string; decision: unknown; decidedById: string | null }[],
+    // string | undefined여야 한다. toDetail의 currentUserId는 optional이고 create()·
+    // applyTransition()이 actor 없이 호출하므로, required로 바꾸거나 `!`·`?? ''`로 우회하면
+    // 그 두 경로의 iAlreadyActed가 뒤집힌다. 단, 이를 직접 잡아주는 테스트는 없다 —
+    // 기존 iAlreadyActed 단언(change-request.service.spec.ts의 "toDetail: iAlreadyActed /
+    // canActAsDelegate gating")은 currentUserId가 있는 findOne() 경로만 검증한다.
+    currentUserId?: string,
+  ): boolean {
+    return (
+      approvers.some((a) => a.userId === currentUserId && a.decision !== null) ||
+      approvers.some((a) => a.decidedById === currentUserId)
+    );
   }
 
   /** Flattens denormalized author/reviewer/approver/actor display names for the detail view. */
@@ -451,11 +539,10 @@ export class ChangeRequestService {
     changeRequest: DetailPayload,
     currentUserId?: string,
     delegatorIds: string[] = [],
+    delegateNameByDelegatorId: Map<string, string> = new Map(),
   ) {
     const { author, reviewer, approvers, statusHistory, ...rest } = changeRequest;
-    const actorAlreadyActed =
-      approvers.some((a) => a.userId === currentUserId && a.decision !== null) ||
-      approvers.some((a) => a.decidedById === currentUserId);
+    const actorAlreadyActed = this.alreadyActed(approvers, currentUserId);
     return {
       ...rest,
       authorName: author?.name ?? null,
@@ -469,6 +556,8 @@ export class ChangeRequestService {
         comment: a.comment,
         decidedAt: a.decidedAt,
         decidedBy: a.decidedBy?.name ?? null,
+        // 결정 전 위임 표시. 결정 후의 대리 표시는 위 decidedBy가 담당한다.
+        delegatedTo: delegateNameByDelegatorId.get(a.userId) ?? null,
       })),
       iAlreadyActed: actorAlreadyActed,
       canActAsDelegate:

@@ -437,7 +437,7 @@ Expected: `delegatedFrom`이 `undefined`라 6개 중 "이름을 준다" 2건이 
 - [ ] **Step 5: 테스트 통과 확인**
 
 Run: `pnpm --filter @dbflow/api test`
-Expected: 228 + 6 = 234개 통과, 기존 테스트 무수정.
+Expected: 233 + 6 = 239개 통과, 기존 테스트 무수정.
 
 - [ ] **Step 6: 커밋**
 
@@ -602,7 +602,7 @@ approver 매핑에 한 줄 추가한다.
 - [ ] **Step 5: 테스트 통과 확인**
 
 Run: `pnpm --filter @dbflow/api test`
-Expected: 234 + 3 = 237개 통과, 기존 무수정.
+Expected: 239 + 3 = 242개 통과, 기존 무수정.
 
 - [ ] **Step 6: 커밋**
 
@@ -1605,7 +1605,7 @@ pnpm --filter @dbflow/web exec tsc --noEmit && \
 pnpm --filter @dbflow/web build && \
 pnpm --filter @dbflow/api test
 ```
-Expected: tsc 0, build 성공, api 237개 통과.
+Expected: tsc 0, build 성공, api 242개 통과.
 
 - [ ] **Step 7: 커밋**
 
@@ -1658,7 +1658,7 @@ git commit -m "docs: record stage-1 inbox completion and its QA items" -- \
 ## 최종 검증
 
 ```bash
-pnpm --filter @dbflow/api test       # 237개 (221 기존 + 16 신규), 기존 무수정
+pnpm --filter @dbflow/api test       # 242개 (221 기존 + 5 되찾은 e2e + 16 신규), 기존 무수정
 pnpm --filter @dbflow/web test       # 50개 (27 기존 + 23 신규), 기존 무수정
 pnpm --filter @dbflow/web exec tsc --noEmit
 pnpm --filter @dbflow/web build

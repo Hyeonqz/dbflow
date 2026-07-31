@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTimeZone, useTranslations } from 'next-intl';
 import { useCurrentUser, type User } from '@/lib/auth';
+import { useInbox } from '@/components/inbox-context';
 import {
   applyChangeRequest,
   approveChangeRequest,
@@ -51,6 +52,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
   const locale = useLocale() as Locale;
   const t = useTranslations('changeRequestDetail');
   const { user, ready } = useCurrentUser();
+  const { refresh: refreshInbox } = useInbox();
   const [cr, setCr] = useState<ChangeRequestDetail | null>(null);
   const [executions, setExecutions] = useState<Execution[] | null>(null);
   const [backups, setBackups] = useState<Backup[]>([]);
@@ -66,6 +68,12 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
       })
       .catch((err: Error) => setError(err.message));
   }, [id]);
+
+  const afterAction = useCallback(async () => {
+    await load();
+    // 방금 처리한 항목이 배지에 남으면 사용자가 카운트를 신뢰하지 않게 된다.
+    await refreshInbox();
+  }, [load, refreshInbox]);
 
   const loadExecutions = useCallback(() => {
     return listExecutions(id)
@@ -163,17 +171,18 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
 
             {/* Right: actions + apply + history + status history */}
             <div className="flex flex-col gap-6">
-              <AssigneePanel cr={cr} user={user} onDone={load} />
+              <AssigneePanel cr={cr} user={user} onDone={afterAction} />
 
               <ApprovalProgressPanel cr={cr} />
 
-              <ActionPanel cr={cr} user={user} onDone={load} />
+              <ActionPanel cr={cr} user={user} onDone={afterAction} />
 
               <ApplyPanel
                 cr={cr}
                 user={user}
                 onApplied={async () => {
                   await Promise.all([load(), loadExecutions(), loadBackups()]);
+                  await refreshInbox();
                 }}
               />
 
@@ -185,6 +194,7 @@ export default function ChangeRequestDetailPage({ params }: { params: { id: stri
                 backupsNotice={backupsNotice}
                 onRolledBack={async () => {
                   await Promise.all([load(), loadExecutions(), loadBackups()]);
+                  await refreshInbox();
                 }}
               />
 
@@ -333,7 +343,15 @@ function ApprovalProgressPanel({ cr }: { cr: ChangeRequestDetail }) {
                 : (a.name ?? t('noName'))}
               {a.department && <span className="text-muted"> ({a.department})</span>}
             </span>
-            <ApproverDecisionBadge decision={a.decision} />
+            <div className="flex items-center gap-2">
+              {/* 결정 후에는 위 decidedBy가 대리 사실을 담당하므로 결정 전(decision===null)에만 보여야 이중 표기를 피한다. */}
+              {a.decision === null && a.delegatedTo && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                  {t('delegatingNow')}: {a.delegatedTo}
+                </span>
+              )}
+              <ApproverDecisionBadge decision={a.decision} />
+            </div>
           </li>
         ))}
       </ul>

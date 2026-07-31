@@ -146,6 +146,8 @@ export type ChangeRequestSummary = {
   myApprovalPending: boolean;
   createdAt: string;
   updatedAt: string;
+  /** 위임을 통해서만 내 범위에 든 항목의 위임자 이름. 내 것이면 null. */
+  delegatedFrom: string | null;
 };
 
 /** 생성 요청에 보내는 파일 (서버가 order를 자동 부여). */
@@ -184,9 +186,14 @@ export type ChangeRequestApprover = {
   decidedAt: string | null;
   /** 대리 결재로 결정된 경우 실제 결정자 이름(본인 결정 시 null). */
   decidedBy: string | null;
+  /** 이 결재자가 현재 위임 중이면 대결자 이름(결정 전 표시). 결정 후는 decidedBy를 본다. */
+  delegatedTo: string | null;
 };
 
-export type ChangeRequestDetail = Omit<ChangeRequestSummary, 'approverNames' | 'approvalProgress' | 'myApprovalPending'> & {
+export type ChangeRequestDetail = Omit<
+  ChangeRequestSummary,
+  'approverNames' | 'approvalProgress' | 'myApprovalPending' | 'delegatedFrom'
+> & {
   description: string;
   files: ChangeRequestFile[];
   statusHistory: StatusHistoryEntry[];
@@ -211,6 +218,11 @@ export type CreateChangeRequestInput = {
 // ---------------------------------------------------------------------------
 export function listChangeRequests() {
   return apiFetch<ChangeRequestSummary[]>('/change-requests');
+}
+
+/** 내가 지금 결정할 수 있는 변경요청만, 오래 기다린 순. */
+export function listInbox() {
+  return apiFetch<ChangeRequestSummary[]>('/change-requests/inbox');
 }
 
 export function getChangeRequest(id: string) {

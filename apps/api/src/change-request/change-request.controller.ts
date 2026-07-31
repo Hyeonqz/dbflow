@@ -35,6 +35,12 @@ export class ChangeRequestController {
     return this.service.list(user);
   }
 
+  // 주의: @Get(':id')보다 위에 있어야 한다. 아래에 두면 'inbox'가 :id로 캡처돼 404가 된다.
+  @Get('inbox')
+  inbox(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.inbox(user);
+  }
+
   @Get(':id')
   detail(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
     return this.service.findOne(user, id);

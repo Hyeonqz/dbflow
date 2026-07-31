@@ -9,7 +9,12 @@
     "openMenu": "메뉴 열기",
     "menu": "메뉴",
     "collapseSidebar": "사이드바 접기",
-    "expandSidebar": "사이드바 펼치기"
+    "expandSidebar": "사이드바 펼치기",
+    "duration": {
+      "days": "{count, plural, other {#일}}",
+      "hours": "{count, plural, other {#시간}}",
+      "minutes": "{count, plural, other {#분}}"
+    }
   },
   "login": {
     "heading": "로그인",
@@ -36,7 +41,8 @@
     "audit": "감사 로그",
     "sqlReview": "SQL 리뷰 정책",
     "approvalPolicy": "결재 정책",
-    "applySchedule": "작업창·동결"
+    "applySchedule": "작업창·동결",
+    "inboxBadgeAria": "결재 대기 {count}건"
   },
   "enum": {
     "status": {
@@ -156,6 +162,7 @@
     "executionsUnavailable": "적용 이력을 불러오지 못했습니다. 적용된 적이 없다는 뜻이 아닙니다. 페이지를 새로고침해 확인해 주세요.",
     "applyHistoryTitle": "적용 이력",
     "staleContent": "화면을 갱신하지 못했습니다. 아래 내용은 최신이 아닐 수 있습니다.",
+    "delegatingNow": "위임 중",
     "day": {
       "sun": "일",
       "mon": "월",
@@ -394,7 +401,20 @@
     },
     "recentTitle": "최근 변경 요청",
     "viewAll": "전체 보기 →",
-    "emptyRecent": "아직 변경 요청이 없습니다."
+    "emptyRecent": "아직 변경 요청이 없습니다.",
+    "inbox": {
+      "title": "내 결정 대기",
+      "empty": "결정 대기 중인 변경요청이 없습니다.",
+      "waitingFor": "{duration} 대기",
+      "delegatedFrom": "위임: {name} 대리"
+    },
+    "blocked": {
+      "draft": "제출 대기 — 당신 차례입니다",
+      "review": "검토 대기: {name}",
+      "approval": "결재 대기 {approved}/{required}",
+      "rejected": "반려됨",
+      "apply": "적용 대기"
+    }
   },
   "users": {
     "loading": "불러오는 중…",

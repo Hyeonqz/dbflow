@@ -5,6 +5,7 @@ import type { SVGProps } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { logout, type Role, type User } from '@/lib/auth';
+import { useInbox } from '@/components/inbox-context';
 import { ThemeToggle } from '@/components/theme';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { CalendarIcon, ChevronIcon, ClipboardIcon, DatabaseIcon, DiffIcon, HomeIcon, ShieldCheckIcon, ShieldIcon, UsersCheckIcon, UsersIcon, UserSwitchIcon } from '@/components/icons';
@@ -53,6 +54,8 @@ export function Sidebar({
   const tEnum = useTranslations('enum');
   const tCommon = useTranslations('common');
   const items = NAV.filter((it) => !it.roles || it.roles.includes(user.role));
+  const { count: inboxCount } = useInbox();
+  const canDecide = user.role === 'REVIEWER' || user.role === 'APPROVER';
 
   return (
     <div className="flex h-full flex-col">
@@ -80,6 +83,8 @@ export function Sidebar({
       <nav className="flex-1 space-y-1 px-3">
         {items.map((it) => {
           const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
+          const showBadge = canDecide && inboxCount > 0 && it.href === '/change-requests';
+          const badgeText = showBadge ? t('inboxBadgeAria', { count: inboxCount }) : '';
           return (
             <Link
               key={it.href}
@@ -87,13 +92,34 @@ export function Sidebar({
               onClick={onNavigate}
               aria-current={active ? 'page' : undefined}
               title={collapsed ? t(it.labelKey) : undefined}
-              aria-label={collapsed ? t(it.labelKey) : undefined}
+              // 접힘 모드: Link의 aria-label이 하위 트리의 접근 가능한 이름을 대체하므로
+              // 배지에 라벨을 붙이면 절대 읽히지 않는다. 여기서 합성한다.
+              aria-label={
+                collapsed
+                  ? showBadge
+                    ? `${t(it.labelKey)}, ${badgeText}`
+                    : t(it.labelKey)
+                  : undefined
+              }
               className={`focusable flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                collapsed ? 'justify-center' : ''
+                collapsed ? 'relative justify-center' : ''
               } ${active ? 'bg-primary text-white' : 'text-muted hover:bg-subtle hover:text-ink'}`}
             >
               <it.Icon className="shrink-0" />
               {!collapsed && <span>{t(it.labelKey)}</span>}
+              {showBadge && (
+                <span
+                  // 펼침 모드에서는 배지가 접근 가능한 이름에 기여해야 하므로 라벨을 준다.
+                  aria-label={collapsed ? undefined : badgeText}
+                  className={
+                    collapsed
+                      ? 'absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-4 text-white ring-2 ring-card'
+                      : 'ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold text-white'
+                  }
+                >
+                  {inboxCount}
+                </span>
+              )}
             </Link>
           );
         })}

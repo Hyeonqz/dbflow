@@ -66,6 +66,14 @@ describe('dashboard inbox', () => {
     expect(within(section).getByText('No change requests are waiting on your decision.')).toBeInTheDocument();
   });
 
+  it('shows a loading state instead of the empty sentence while the inbox is still fetching', async () => {
+    inbox.value = { ...inbox.value, loading: true };
+    renderPage();
+    const section = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section') as HTMLElement;
+    expect(within(section).getByText('Loading…')).toBeInTheDocument();
+    expect(within(section).queryByText('No change requests are waiting on your decision.')).toBeNull();
+  });
+
   it('marks a delegated item with the delegator name', async () => {
     inbox.value = {
       ...inbox.value,
@@ -121,7 +129,7 @@ describe('dashboard inbox', () => {
     const link = await screen.findByRole('link', { name: /Applied change/ });
     const row = link.closest('li') as HTMLElement;
     expect(row).toBeInTheDocument();
-    expect(row.querySelector('p.text-xs.text-muted')).toBeNull();
+    expect(within(row).queryByText(/Waiting|Rejected/)).toBeNull();
   });
 
   it("renders the inbox wait duration from the fixture's actual elapsed time", async () => {

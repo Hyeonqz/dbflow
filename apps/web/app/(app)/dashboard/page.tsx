@@ -129,7 +129,7 @@ export default function Dashboard() {
   const tDetail = useTranslations('changeRequestDetail');
   const locale = useLocale() as Locale;
   const { user, ready } = useUser();
-  const { items: inboxItems } = useInbox();
+  const { items: inboxItems, loading: inboxLoading } = useInbox();
   const canDecide = user?.role === 'REVIEWER' || user?.role === 'APPROVER';
   const router = useRouter();
   const [items, setItems] = useState<ChangeRequestSummary[] | null>(null);
@@ -193,7 +193,9 @@ export default function Dashboard() {
       {canDecide && (
         <section>
           <h2 className="text-base font-semibold text-ink">{t('inbox.title')}</h2>
-          {inboxItems.length === 0 ? (
+          {inboxLoading ? (
+            <p className="mt-3 text-sm text-muted">{tCommon('loading')}</p>
+          ) : inboxItems.length === 0 ? (
             <p className="mt-3 text-sm text-muted">{t('inbox.empty')}</p>
           ) : (
             <ul className="mt-3 space-y-2">
@@ -257,30 +259,30 @@ export default function Dashboard() {
                 <div className="mt-4 rounded-2xl bg-subtle px-6 py-12 text-center text-muted">{t('emptyRecent')}</div>
               ) : (
                 <ul className="mt-2 divide-y divide-border">
-                  {recent.map((it) => (
-                    <li key={it.id}>
-                      <Link
-                        href={`/change-requests/${it.id}`}
-                        className="focusable -mx-2 flex items-center gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-subtle"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-ink">{it.title}</p>
-                          <p className="mt-0.5 truncate text-sm text-muted">
-                            {it.authorName ?? it.authorId} · {formatDateTime(it.createdAt, locale)}
-                          </p>
-                          {user.role === 'DEVELOPER' &&
-                            blockedLabel(it, t, tDetail('unassigned')) && (
-                              <p className="text-xs text-muted">{blockedLabel(it, t, tDetail('unassigned'))}</p>
-                            )}
-                        </div>
-                        <EnvBadge env={it.targetEnv} />
-                        <StatusBadge status={it.status} />
-                        <span aria-hidden className="text-muted">
-                          →
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
+                  {recent.map((it) => {
+                    const blocked = user.role === 'DEVELOPER' ? blockedLabel(it, t, tDetail('unassigned')) : null;
+                    return (
+                      <li key={it.id}>
+                        <Link
+                          href={`/change-requests/${it.id}`}
+                          className="focusable -mx-2 flex items-center gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-subtle"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium text-ink">{it.title}</p>
+                            <p className="mt-0.5 truncate text-sm text-muted">
+                              {it.authorName ?? it.authorId} · {formatDateTime(it.createdAt, locale)}
+                            </p>
+                            {blocked && <p className="text-xs text-muted">{blocked}</p>}
+                          </div>
+                          <EnvBadge env={it.targetEnv} />
+                          <StatusBadge status={it.status} />
+                          <span aria-hidden className="text-muted">
+                            →
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>

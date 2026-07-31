@@ -523,7 +523,9 @@ export class ChangeRequestService {
     approvers: { userId: string; decision: unknown; decidedById: string | null }[],
     // string | undefined여야 한다. toDetail의 currentUserId는 optional이고 create()·
     // applyTransition()이 actor 없이 호출하므로, required로 바꾸거나 `!`·`?? ''`로 우회하면
-    // 그 두 경로의 iAlreadyActed가 뒤집힌다(기존 단언 2건이 이를 잡는다).
+    // 그 두 경로의 iAlreadyActed가 뒤집힌다. 단, 이를 직접 잡아주는 테스트는 없다 —
+    // 기존 iAlreadyActed 단언(change-request.service.spec.ts의 "toDetail: iAlreadyActed /
+    // canActAsDelegate gating")은 currentUserId가 있는 findOne() 경로만 검증한다.
     currentUserId?: string,
   ): boolean {
     return (

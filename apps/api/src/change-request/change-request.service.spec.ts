@@ -1335,11 +1335,29 @@ describe('inbox — 내가 지금 결정할 수 있는 것만', () => {
     expect(rows.map((r) => r.id)).toEqual(['cr-s']);
   });
 
-  it('updatedAt 오름차순을 쿼리 인자로 요구한다', async () => {
+  it('updatedAt 오름차순과 visibilityWhere를 REVIEWER 쿼리 인자로 요구한다', async () => {
     // 이 스위트의 findMany mock은 orderBy를 무시하므로 결과 순서를 단언하면 픽스처를 검사하는 셈이다.
+    // where를 단언하지 않으면 visibilityWhere를 where: {}로 바꿔도(=남의 CR이 새는 접근제어 붕괴) 잡히지 않는다.
     const { service, findManyMock } = makeService();
     await service.inbox({ userId: 'u-rev', role: Role.REVIEWER } as any);
     expect(findManyMock.mock.calls[0][0].orderBy).toEqual({ updatedAt: 'asc' });
+    expect(findManyMock.mock.calls[0][0].where).toEqual({
+      OR: [{ reviewerId: 'u-rev' }, { reviewerId: { in: [] } }],
+      status: { not: ChangeRequestStatus.DRAFT },
+    });
+  });
+
+  it('updatedAt 오름차순과 visibilityWhere를 APPROVER 쿼리 인자로 요구한다', async () => {
+    const { service, findManyMock } = makeService();
+    await service.inbox({ userId: 'u-appr', role: Role.APPROVER } as any);
+    expect(findManyMock.mock.calls[0][0].orderBy).toEqual({ updatedAt: 'asc' });
+    expect(findManyMock.mock.calls[0][0].where).toEqual({
+      OR: [
+        { approvers: { some: { userId: 'u-appr' } } },
+        { approvers: { some: { userId: { in: [] } } } },
+      ],
+      status: { not: ChangeRequestStatus.DRAFT },
+    });
   });
 
   it('APPROVER에게 myApprovalPending 항목을 준다', async () => {

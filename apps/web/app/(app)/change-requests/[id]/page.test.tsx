@@ -404,6 +404,39 @@ describe('stale content banner', () => {
   });
 });
 
+describe('delegation badge', () => {
+  const undecidedApprover = {
+    userId: 'u-appr',
+    name: '결재자',
+    department: null,
+    order: 0,
+    decision: null,
+    comment: null,
+    decidedAt: null,
+    decidedBy: null,
+    delegatedTo: '대결자',
+  };
+
+  it('shows the delegate name while the approver has not decided', async () => {
+    vi.mocked(api.getChangeRequest).mockResolvedValue(makeCr({ approvers: [undecidedApprover] }));
+    renderPage();
+
+    expect(await screen.findByText(/대결자/)).toBeInTheDocument();
+  });
+
+  it('hides the delegate badge once that approver has decided', async () => {
+    vi.mocked(api.getChangeRequest).mockResolvedValue(
+      makeCr({
+        approvers: [{ ...undecidedApprover, decision: 'APPROVE', decidedAt: '2026-07-05T00:00:00.000Z' }],
+      }),
+    );
+    renderPage();
+
+    await screen.findByRole('heading', { name: 'Add index on orders' });
+    expect(screen.queryByText(/대결자/)).toBeNull();
+  });
+});
+
 describe('inbox refresh wiring', () => {
   it('calls useInbox().refresh() after a successful decision, so the badge drops the item', async () => {
     vi.mocked(api.submitChangeRequest).mockResolvedValue(makeCr({ status: 'SUBMITTED' }));

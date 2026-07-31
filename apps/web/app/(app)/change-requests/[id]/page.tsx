@@ -343,7 +343,15 @@ function ApprovalProgressPanel({ cr }: { cr: ChangeRequestDetail }) {
                 : (a.name ?? t('noName'))}
               {a.department && <span className="text-muted"> ({a.department})</span>}
             </span>
-            <ApproverDecisionBadge decision={a.decision} />
+            <div className="flex items-center gap-2">
+              {/* 결정 후에는 위 decidedBy가 대리 사실을 담당하므로 결정 전(decision===null)에만 보여야 이중 표기를 피한다. */}
+              {a.decision === null && a.delegatedTo && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                  {t('delegatingNow')}: {a.delegatedTo}
+                </span>
+              )}
+              <ApproverDecisionBadge decision={a.decision} />
+            </div>
           </li>
         ))}
       </ul>
